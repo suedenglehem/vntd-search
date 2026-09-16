@@ -2,7 +2,8 @@
 
 I needed a simple scanner of vinted to check on all cheap table tennis blades in 10-30e range, often blades with
 broken edges which i can easily repair are in this range. So, first asked hermes to do a scanner for that, it
-got complettely bogged down in to complex ways of doing it. Claude solved it all in 2h. I run in on win10, you want
+got complettely bogged down in too complex ways of doing it. Claude solved it all in 2h. It's generic of cause,
+just create or json for finding rtx3090s or cheap plutonium lumps. I run in on win10, you want
 to fire it on linux/mac etc or in docker, just ask claude to rewrite the runner script.
 
 Scanner of [vinted.fr](https://www.vinted.fr) for recent listings across a list of brands,
