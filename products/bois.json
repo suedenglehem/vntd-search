@@ -1,0 +1,28 @@
+{
+  "title": "Bois & raquettes de tennis de table",
+  "subtitle": "annonces vérifiées sur photo (revêtements, sacs et vêtements écartés)",
+  "legend": "<b>bois</b> = lame seule · <b>raquette</b> = raquette complète",
+  "brands": ["joola", "tibhar", "xiom", "nexy", "victas", "andro", "cornilleau", "dhs", "butterfly"],
+  "brand_aliases": { "victas": "VICTAS", "dhs": "DHS" },
+  "brand_order": ["Butterfly", "Tibhar", "Joola", "DHS", "Cornilleau", "Andro", "Xiom", "VICTAS", "Nexy"],
+  "price_min": 10,
+  "price_max": 30,
+  "age_months": 4,
+  "max_items": 200,
+  "keep_classes": ["BLADE", "RACKET"],
+  "badges": { "BLADE": "bois", "RACKET": "raquette" },
+  "badge_colors": {
+    "bois":     ["#eef6ee", "#2f7d43", "#cfe6d2"],
+    "raquette": ["#eef1fd", "#3b56c4", "#d4dcf8"]
+  },
+  "prompts": {
+    "title_system": "You classify Vinted listings of table-tennis gear. Reply with EXACTLY one of: BLADE, RACKET, OTHER. BLADE = a table-tennis blade/wood base without rubber attached (bois, blade, Schlägerholz, madeira sem borracha). RACKET = a finished racket with rubber attached (raquette, schläger, table tennis racket, pala con goma, set containing a racket). OTHER = anything else: rubber only, balls, apparel, tables, nets, bags, unrelated items.",
+    "title_user": "Listing title: \"{title}\"\nSeller brand field: \"{brand}\"\nClassify:",
+    "vision_system": "You are verifying a Vinted listing for table-tennis buying. You are given the PHOTO of the item and its title. Look at the photo carefully. Decide what the item ACTUALLY is. Reply with EXACTLY one of: BLADE, RACKET, RUBBER, OTHER. BLADE = table-tennis blade (wood base) WITHOUT rubber attached. RACKET = finished table-tennis racket WITH rubber attached, or a set of rackets. RUBBER = table-tennis rubber/sheet (revêtement/gomme) WITHOUT a blade, or rubber+blade combo listed as rubber. OTHER = anything else: clothing, shoes, balls, bags, tables, scoreboards, unrelated. When in doubt between BLADE and RACKET, judge from the photo: rubber visible on the face = RACKET, bare wood = BLADE.",
+    "vision_user": "Title: \"{title}\"\nSeller brand: \"{brand}\"\nClassify from the photo:",
+    "audit_system": "Look at this photo of a Vinted listing for table-tennis. First describe the main object(s) in the photo in 1-2 sentences (what is it, is there rubber on a blade, is it a bare wood blade, a complete racket, a rubber sheet, or something else). Then on the last line write 'VERDICT: X' where X is one of BLADE, RACKET, RUBBER, OTHER.",
+    "audit_user": "Title: \"{title}\"\nBrand: \"{brand}\""
+  },
+  "title_max_tokens": 300,
+  "vision_max_tokens": 400
+}
