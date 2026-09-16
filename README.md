@@ -1,6 +1,11 @@
 # Vinted Product Finder
 
-Scans [vinted.fr](https://www.vinted.fr) for recent listings across a list of brands,
+I needed a simple scanner of vinted to check on all cheap table tennis blades in 10-30e range, often blades with
+broken edges which i can easily repair are in this range. So, first asked hermes to do a scanner for that, it
+got complettely bogged down in to complex ways of doing it. Claude solved it all in 2h. I run in on win10, you want
+to fire it on linux/mac etc or in docker, just ask claude to rewrite the runner script.
+
+Scanner of [vinted.fr](https://www.vinted.fr) for recent listings across a list of brands,
 filters to a price range and an age window (default ~4 months), and generates a
 self-contained HTML page organized by brand. Every listing is verified **on its photo**
 by a local LLM, so items that sellers mislabel (e.g. rubbers sold as "raquette", or
