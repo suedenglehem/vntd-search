@@ -35,8 +35,6 @@
   .row input[type=text] { flex:1; min-width:70px; }
   .row select { font:inherit; padding:5px 6px; border:1px solid var(--line); border-radius:7px; background:#fff; }
   .row button.x { padding:3px 9px; color:#a33; border-color:#e4caca; }
-  .checks { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:6px; }
-  .checks label { font-weight:600; user-select:none; }
   pre#preview { background:#10151d; color:#dbe4f3; border-radius:10px; padding:14px; margin:0;
                 font:12.5px/1.5 ui-monospace, Consolas, monospace; overflow:auto; max-height:70vh; }
   #status { min-height:20px; font-size:13px; color:var(--mut); word-break:break-all; }
@@ -113,20 +111,17 @@
 
   <section>
     <h2>Classes &amp; badges</h2>
-    <div class="lbl">Keep classes (required — which LLM replies count as your product)</div>
-    <div class="checks" id="keepChecks">
-      <label><input type="checkbox" value="BLADE" checked> BLADE</label>
-      <label><input type="checkbox" value="RACKET" checked> RACKET</label>
-      <label><input type="checkbox" value="RUBBER"> RUBBER</label>
-      <label><input type="checkbox" value="OTHER"> OTHER</label>
-    </div>
+    <label class="fld"><span>Keep classes (required — comma separated; which LLM reply words count as your product)</span>
+      <input type="text" id="keepClasses" placeholder='e.g. BLADE, RACKET'>
+    </label>
     <p class="hint">Badge label per kept class (optional — default: class name lowercased). Colors are CSS colors, all three or none.</p>
     <div id="badgeRows"></div>
     <button type="button" id="btnBadge">+ badge</button>
   </section>
 
   <section>
-    <h2>Prompts (required — keep the one-word reply contract: BLADE / RACKET / RUBBER / OTHER)</h2>
+    <h2>Prompts</h2>
+    <p class="hint">Keep the one-word reply contract: the model must answer with exactly one of BLADE / RACKET / RUBBER / OTHER (you can rename what those words MEAN in your definitions, but not the four words themselves).</p>
     <label class="fld"><span>title_system — defines the classes for your product</span>
       <textarea id="p_title_system"></textarea></label>
     <label class="fld"><span>title_user — per-item text prompt (placeholders {title}, {brand})</span>
@@ -227,8 +222,9 @@ function collect() {
   const maxItems = numOrNull($('maxItems'));
   if (maxItems !== null && (isNaN(maxItems) || maxItems < 1)) errs.push('max_items must be ≥ 1');
 
-  const keep = [...document.querySelectorAll('#keepChecks input:checked')].map(c => c.value);
-  if (!keep.length) errs.push('select at least one keep class');
+  const keep = $('keepClasses').value.split(/[\s,]+/).map(s => s.toUpperCase()).filter(Boolean);
+  if (!keep.length) errs.push('at least one keep class is required');
+  for (const k of keep) if (!VOCAB.includes(k)) errs.push('unknown keep class "' + k + '" (must be BLADE / RACKET / RUBBER / OTHER)');
 
   // aliases + brand_order
   const aliases = {};
@@ -331,8 +327,7 @@ function fillFromJson(cfg, nameFromFile) {
   if (cfg.price_max != null) $('priceMax').value = cfg.price_max;
   $('ageMonths').value = cfg.age_months ?? 4;
   $('maxItems').value  = cfg.max_items ?? 200;
-  const keep = new Set(cfg.keep_classes || ['BLADE', 'RACKET']);
-  for (const c of document.querySelectorAll('#keepChecks input')) c.checked = keep.has(c.value);
+  $('keepClasses').value = (cfg.keep_classes || ['BLADE', 'RACKET']).join(', ');
   for (const [cls, label] of Object.entries(cfg.badges || {})) {
     const col = (cfg.badge_colors || {})[label];
     addBadgeRow(cls, label, col && col[0], col && col[1], col && col[2]);
@@ -388,7 +383,13 @@ $('btnCopy').onclick = async () => {
   setStatus('JSON copied to clipboard', false);
 };
 $('btnSave').onclick = doSave;
-refresh();
+
+// prefill with bois.json (works when served over http, e.g. `python -m http.server`);
+// under file:// the fetch is blocked by CORS and we start empty instead
+fetch('products/bois.json')
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(cfg => { fillFromJson(cfg, 'bois'); setStatus('Prefilled from products/bois.json — edit and Save as a new name (or overwrite bois).', false); })
+  .catch(() => refresh());
 </script>
 </body>
 </html>
