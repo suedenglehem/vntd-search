@@ -7,6 +7,8 @@ __pycache__/
 work/data/
 work/wayback_*.txt
 bois/
+# archived previous bois output (kept locally)
+bois.old/
 
 # Local session notes / working state
 .resume
