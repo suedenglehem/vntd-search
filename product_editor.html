@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vinted product editor</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --line:#dde1e7; --ink:#22272e; --mut:#6b7480; --acc:#3b56c4; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink);
+         font:14px/1.45 system-ui, "Segoe UI", sans-serif; }
+  header { display:flex; align-items:center; gap:16px; padding:12px 20px;
+           background:#fff; border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
+  header h1 { font-size:16px; margin:0; white-space:nowrap; }
+  .grow { flex:1; }
+  button { font:inherit; padding:6px 14px; border-radius:8px; border:1px solid var(--line);
+           background:#fff; cursor:pointer; }
+  button:hover { background:#f0f2f5; }
+  button.primary { background:var(--acc); border-color:var(--acc); color:#fff; }
+  button.primary:hover { filter:brightness(1.08); }
+  main { display:flex; gap:16px; padding:16px 20px; align-items:flex-start; max-width:1400px; margin:0 auto; }
+  form { flex:1.25; min-width:0; }
+  aside { flex:1; position:sticky; top:70px; display:flex; flex-direction:column; gap:10px; }
+  section { background:var(--card); border:1px solid var(--line); border-radius:10px;
+            padding:14px 16px; margin-bottom:14px; }
+  section h2 { font-size:13px; text-transform:uppercase; letter-spacing:.05em; color:var(--mut);
+               margin:0 0 10px; }
+  label.fld { display:block; margin-bottom:10px; }
+  label.fld > span, .lbl { display:block; font-weight:600; margin-bottom:3px; }
+  .hint { color:var(--mut); font-size:12px; margin-top:-2px; margin-bottom:8px; }
+  input[type=text], input[type=number], textarea { width:100%; font:inherit; padding:6px 9px;
+           border:1px solid var(--line); border-radius:7px; background:#fff; color:var(--ink); }
+  textarea { font-family:ui-monospace, Consolas, monospace; font-size:12.5px; resize:vertical; min-height:64px; }
+  input:focus, textarea:focus { outline:2px solid #b9c4f0; border-color:var(--acc); }
+  .row { display:flex; gap:8px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
+  .row input[type=text] { flex:1; min-width:70px; }
+  .row select { font:inherit; padding:5px 6px; border:1px solid var(--line); border-radius:7px; background:#fff; }
+  .row button.x { padding:3px 9px; color:#a33; border-color:#e4caca; }
+  .checks { display:flex; gap:18px; flex-wrap:wrap; margin-bottom:6px; }
+  .checks label { font-weight:600; user-select:none; }
+  pre#preview { background:#10151d; color:#dbe4f3; border-radius:10px; padding:14px; margin:0;
+                font:12.5px/1.5 ui-monospace, Consolas, monospace; overflow:auto; max-height:70vh; }
+  #status { min-height:20px; font-size:13px; color:var(--mut); word-break:break-all; }
+  #status.err { color:#b3402e; }
+  .cmd { background:#eef1fd; border:1px solid #d4dcf8; color:#3b56c4; border-radius:7px;
+         padding:6px 10px; font-family:ui-monospace, Consolas, monospace; font-size:12.5px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Vinted product editor</h1>
+  <div class="grow"></div>
+  <button id="btnNew">New / clear</button>
+  <label class="cmd" style="cursor:pointer;">Load existing…
+    <input type="file" id="loadFile" accept=".json,application/json" hidden>
+  </label>
+  <button id="btnCopy">Copy JSON</button>
+  <button id="btnSave" class="primary">Save products/&lt;name&gt;.json</button>
+</header>
+
+<main>
+<form id="form" autocomplete="off">
+
+  <section>
+    <h2>Product name</h2>
+    <label class="fld"><span>Name (one word — becomes the file name and run argument)</span>
+      <input type="text" id="name" placeholder="e.g. nvidia" pattern="[a-z0-9][a-z0-9_-]*">
+    </label>
+    <div class="cmd" id="cmdPreview">.\run.ps1 -Product &lt;name&gt;</div>
+  </section>
+
+  <section>
+    <h2>Page header</h2>
+    <label class="fld"><span>Title <b>(required)</b></span>
+      <input type="text" id="title" placeholder='e.g. "Bois & raquettes de tennis de table"'>
+    </label>
+    <label class="fld"><span>Subtitle (optional — plain text, no HTML)</span>
+      <input type="text" id="subtitle">
+    </label>
+    <label class="fld"><span>Legend (optional — may contain inline HTML, inserted raw)</span>
+      <input type="text" id="legend" placeholder='e.g. "&lt;b&gt;bois&lt;/b&gt; = lame seule · &lt;b&gt;raquette&lt;/b&gt; = raquette complète">
+    </label>
+  </section>
+
+  <section>
+    <h2>Brands</h2>
+    <label class="fld"><span>Brand words to search (required — comma separated, lowercase)</span>
+      <input type="text" id="brands" placeholder='e.g. joola, tibhar, xiom'>
+    </label>
+    <div class="lbl">Display aliases (optional — lowercase word → display name)</div>
+    <div id="aliasRows"></div>
+    <button type="button" id="btnAlias">+ alias</button>
+    <label class="fld" style="margin-top:10px;"><span>Brand section order (optional — comma separated display names; unlisted brands follow alphabetically)</span>
+      <input type="text" id="brandOrder" placeholder='e.g. Butterfly, Tibhar, Joola'>
+    </label>
+  </section>
+
+  <section>
+    <h2>Filters</h2>
+    <div class="row">
+      <label class="fld" style="flex:1;margin:0;"><span>Price min € (required)</span>
+        <input type="number" id="priceMin" step="any"></label>
+      <label class="fld" style="flex:1;margin:0;"><span>Price max € (required)</span>
+        <input type="number" id="priceMax" step="any"></label>
+    </div>
+    <div class="row">
+      <label class="fld" style="flex:1;margin:0;"><span>Age window, months (default 4)</span>
+        <input type="number" id="ageMonths" value="4" step="any"></label>
+      <label class="fld" style="flex:1;margin:0;"><span>Max items on page (default 200)</span>
+        <input type="number" id="maxItems" value="200" step="1"></label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Classes &amp; badges</h2>
+    <div class="lbl">Keep classes (required — which LLM replies count as your product)</div>
+    <div class="checks" id="keepChecks">
+      <label><input type="checkbox" value="BLADE" checked> BLADE</label>
+      <label><input type="checkbox" value="RACKET" checked> RACKET</label>
+      <label><input type="checkbox" value="RUBBER"> RUBBER</label>
+      <label><input type="checkbox" value="OTHER"> OTHER</label>
+    </div>
+    <p class="hint">Badge label per kept class (optional — default: class name lowercased). Colors are CSS colors, all three or none.</p>
+    <div id="badgeRows"></div>
+    <button type="button" id="btnBadge">+ badge</button>
+  </section>
+
+  <section>
+    <h2>Prompts (required — keep the one-word reply contract: BLADE / RACKET / RUBBER / OTHER)</h2>
+    <label class="fld"><span>title_system — defines the classes for your product</span>
+      <textarea id="p_title_system"></textarea></label>
+    <label class="fld"><span>title_user — per-item text prompt (placeholders {title}, {brand})</span>
+      <textarea id="p_title_user" rows="2"></textarea></label>
+    <label class="fld"><span>vision_system — photo re-check, stricter contract</span>
+      <textarea id="p_vision_system"></textarea></label>
+    <label class="fld"><span>vision_user — per-item photo prompt (placeholders {title}, {brand})</span>
+      <textarea id="p_vision_user" rows="2"></textarea></label>
+    <label class="fld"><span>audit_system — optional, for audit_dropped.py (description + "VERDICT: X")</span>
+      <textarea id="p_audit_system"></textarea></label>
+    <label class="fld"><span>audit_user — optional</span>
+      <textarea id="p_audit_user" rows="2"></textarea></label>
+  </section>
+
+  <section>
+    <h2>LLM settings</h2>
+    <div class="row">
+      <label class="fld" style="flex:1;margin:0;"><span>Title max tokens (≥300 for reasoning models)</span>
+        <input type="number" id="titleMaxTokens" value="300" step="1"></label>
+      <label class="fld" style="flex:1;margin:0;"><span>Vision max tokens (≥300 for reasoning models)</span>
+        <input type="number" id="visionMaxTokens" value="400" step="1"></label>
+    </div>
+    <div class="row">
+      <label class="fld" style="flex:1;margin:0;"><span>Title workers (default 4)</span>
+        <input type="number" id="workers" step="1" placeholder="4"></label>
+      <label class="fld" style="flex:1;margin:0;"><span>Vision workers (default 3)</span>
+        <input type="number" id="visionWorkers" step="1" placeholder="3"></label>
+    </div>
+  </section>
+
+</form>
+
+<aside>
+  <pre id="preview">{ }</pre>
+  <div class="cmd" id="saveTarget">not saved yet — Save will ask where to put the file (pick products\)</div>
+  <div id="status"></div>
+</aside>
+</main>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const VOCAB = ['BLADE', 'RACKET', 'RUBBER', 'OTHER'];
+let fileHandle = null;   // File System Access handle, reused for overwrites
+
+// ---------- dynamic rows ----------
+function addAliasRow(word, disp) {
+  const d = document.createElement('div'); d.className = 'row';
+  d.innerHTML = '<input type="text" placeholder="lowercase word (e.g. victas)" value="' + escAttr(word || '') + '">' +
+                '<span>→</span>' +
+                '<input type="text" placeholder="display name (e.g. VICTAS)" value="' + escAttr(disp || '') + '">' +
+                '<button type="button" class="x">✕</button>';
+  d.querySelector('.x').onclick = () => { d.remove(); refresh(); };
+  $('aliasRows').appendChild(d);
+}
+function addBadgeRow(cls, label, bg, fg, border) {
+  const d = document.createElement('div'); d.className = 'row';
+  const opts = VOCAB.map(v => '<option' + (v === cls ? ' selected' : '') + '>' + v + '</option>').join('');
+  d.innerHTML = '<select>' + opts + '</select>' +
+                '<input type="text" placeholder="label shown on cards (e.g. bois)" value="' + escAttr(label || '') + '">' +
+                '<input type="text" class="c" style="max-width:90px" placeholder="#bg"  value="' + escAttr(bg || '') + '">' +
+                '<input type="text" class="c" style="max-width:90px" placeholder="#fg"  value="' + escAttr(fg || '') + '">' +
+                '<input type="text" class="c" style="max-width:90px" placeholder="#border" value="' + escAttr(border || '') + '">' +
+                '<button type="button" class="x">✕</button>';
+  d.querySelector('.x').onclick = () => { d.remove(); refresh(); };
+  $('badgeRows').appendChild(d);
+}
+$('btnAlias').onclick = () => { addAliasRow(); refresh(); };
+$('btnBadge').onclick = () => { addBadgeRow(); refresh(); };
+
+function escAttr(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+
+// ---------- collect + validate ----------
+function numOrNull(el) {
+  const v = el.value.trim();
+  if (v === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : NaN;   // NaN fails validation below
+}
+function collect() {
+  const errs = [];
+  const name = $('name').value.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9_-]*$/.test(name)) errs.push('name: one word, lowercase letters/digits/-/_ (e.g. "nvidia")');
+
+  const title = $('title').value.trim();
+  if (!title) errs.push('title is required');
+
+  const brands = $('brands').value.split(/[\s,]+/).map(s => s.toLowerCase()).filter(Boolean);
+  if (!brands.length) errs.push('at least one brand word is required');
+
+  const priceMin = numOrNull($('priceMin')), priceMax = numOrNull($('priceMax'));
+  if (priceMin === null || isNaN(priceMin)) errs.push('price_min must be a number');
+  if (priceMax === null || isNaN(priceMax)) errs.push('price_max must be a number');
+  if (!isNaN(priceMin) && !isNaN(priceMax) && priceMin > priceMax) errs.push('price_min > price_max');
+
+  const ageMonths = numOrNull($('ageMonths'));
+  if (ageMonths !== null && (isNaN(ageMonths) || ageMonths <= 0)) errs.push('age_months must be > 0');
+  const maxItems = numOrNull($('maxItems'));
+  if (maxItems !== null && (isNaN(maxItems) || maxItems < 1)) errs.push('max_items must be ≥ 1');
+
+  const keep = [...document.querySelectorAll('#keepChecks input:checked')].map(c => c.value);
+  if (!keep.length) errs.push('select at least one keep class');
+
+  // aliases + brand_order
+  const aliases = {};
+  for (const r of $('aliasRows').children) {
+    const [w, d] = [...r.querySelectorAll('input')].map(i => i.value.trim());
+    if (!w && !d) continue;
+    if (!w || !d) { errs.push('brand_aliases: each row needs both a word and a display name'); break; }
+    aliases[w.toLowerCase()] = d;
+  }
+  const brandOrder = $('brandOrder').value.split(',').map(s => s.trim()).filter(Boolean);
+
+  // badges + colors (keyed by label)
+  const badges = {}, badgeColors = {};
+  for (const r of $('badgeRows').children) {
+    const cls = r.querySelector('select').value;
+    const [label, bg, fg, border] = [...r.querySelectorAll('input')].map(i => i.value.trim());
+    if (!cls && !label && !bg && !fg && !border) continue;
+    if (!label) { errs.push('badges: each row needs a label'); break; }
+    badges[cls] = label;
+    const set = [bg, fg, border].filter(Boolean);
+    if (set.length && set.length !== 3) { errs.push('badge_colors for "' + label + '": give all three colors or none'); break; }
+    if (set.length === 3) badgeColors[label] = [bg, fg, border];
+  }
+
+  // prompts: four core required, audit pair optional
+  const prompts = {};
+  for (const k of ['title_system', 'title_user', 'vision_system', 'vision_user']) {
+    const v = $('p_' + k).value.trim();
+    if (!v) errs.push('prompts.' + k + ' is required'); else prompts[k] = v;
+  }
+  for (const k of ['audit_system', 'audit_user']) {
+    const v = $('p_' + k).value.trim();
+    if (v) prompts[k] = v;
+  }
+
+  const titleMaxTokens = numOrNull($('titleMaxTokens'));
+  const visionMaxTokens = numOrNull($('visionMaxTokens'));
+  if (titleMaxTokens !== null && (isNaN(titleMaxTokens) || titleMaxTokens < 1)) errs.push('title_max_tokens must be ≥ 1');
+  if (visionMaxTokens !== null && (isNaN(visionMaxTokens) || visionMaxTokens < 1)) errs.push('vision_max_tokens must be ≥ 1');
+  const workers = numOrNull($('workers'));
+  const visionWorkers = numOrNull($('visionWorkers'));
+  if (workers !== null && (isNaN(workers) || workers < 1)) errs.push('workers must be ≥ 1');
+  if (visionWorkers !== null && (isNaN(visionWorkers) || visionWorkers < 1)) errs.push('vision_workers must be ≥ 1');
+
+  // assemble in bois.json key order; optional fields omitted when empty
+  const cfg = { title };
+  if ($('subtitle').value.trim()) cfg.subtitle = $('subtitle').value.trim();
+  if ($('legend').value.trim())   cfg.legend = $('legend').value.trim();
+  cfg.brands = brands;
+  if (Object.keys(aliases).length) cfg.brand_aliases = aliases;
+  if (brandOrder.length)           cfg.brand_order = brandOrder;
+  cfg.price_min = priceMin, cfg.price_max = priceMax;
+  if (ageMonths !== null)          cfg.age_months = ageMonths;
+  if (maxItems !== null)           cfg.max_items = maxItems;
+  cfg.keep_classes = keep;
+  if (Object.keys(badges).length)      cfg.badges = badges;
+  if (Object.keys(badgeColors).length) cfg.badge_colors = badgeColors;
+  cfg.prompts = prompts;
+  if (titleMaxTokens !== null)   cfg.title_max_tokens = titleMaxTokens;
+  if (visionMaxTokens !== null)  cfg.vision_max_tokens = visionMaxTokens;
+  if (workers !== null)          cfg.workers = workers;
+  if (visionWorkers !== null)    cfg.vision_workers = visionWorkers;
+
+  return { ok: !errs.length, errs, name, cfg };
+}
+
+// ---------- live preview ----------
+function refresh() {
+  const r = collect();
+  $('preview').textContent = JSON.stringify(r.cfg, null, 2);
+  $('cmdPreview').textContent = '.\\run.ps1 -Product ' + (r.name || '<name>');
+  if (!r.ok) setStatus(r.errs.join(' · '), true);
+}
+function setStatus(msg, isErr) {
+  const el = $('status');
+  el.textContent = msg; el.className = isErr ? 'err' : '';
+}
+
+// ---------- load existing product json ----------
+$('loadFile').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  f.text().then(t => {
+    try { fillFromJson(JSON.parse(t), f.name.replace(/\.json$/i, '')); }
+    catch (err) { setStatus('Could not parse ' + f.name + ': ' + err.message, true); }
+  });
+  e.target.value = '';
+});
+
+function fillFromJson(cfg, nameFromFile) {
+  document.querySelectorAll('#form input, #form textarea').forEach(el => el.value = '');
+  $('aliasRows').innerHTML = ''; $('badgeRows').innerHTML = '';
+  if (nameFromFile && /^[a-z0-9][a-z0-9_-]*$/i.test(nameFromFile)) $('name').value = nameFromFile.toLowerCase();
+  $('title').value    = cfg.title || '';
+  $('subtitle').value = cfg.subtitle || '';
+  $('legend').value   = cfg.legend || '';
+  $('brands').value   = (cfg.brands || []).join(', ');
+  for (const [w, d] of Object.entries(cfg.brand_aliases || {})) addAliasRow(w, d);
+  $('brandOrder').value = (cfg.brand_order || []).join(', ');
+  if (cfg.price_min != null) $('priceMin').value = cfg.price_min;
+  if (cfg.price_max != null) $('priceMax').value = cfg.price_max;
+  $('ageMonths').value = cfg.age_months ?? 4;
+  $('maxItems').value  = cfg.max_items ?? 200;
+  const keep = new Set(cfg.keep_classes || ['BLADE', 'RACKET']);
+  for (const c of document.querySelectorAll('#keepChecks input')) c.checked = keep.has(c.value);
+  for (const [cls, label] of Object.entries(cfg.badges || {})) {
+    const col = (cfg.badge_colors || {})[label];
+    addBadgeRow(cls, label, col && col[0], col && col[1], col && col[2]);
+  }
+  for (const k of ['title_system', 'title_user', 'vision_system', 'vision_user', 'audit_system', 'audit_user'])
+    $('p_' + k).value = (cfg.prompts || {})[k] || '';
+  $('titleMaxTokens').value  = cfg.title_max_tokens ?? 300;
+  $('visionMaxTokens').value = cfg.vision_max_tokens ?? 400;
+  if (cfg.workers != null)        $('workers').value = cfg.workers;
+  if (cfg.vision_workers != null) $('visionWorkers').value = cfg.vision_workers;
+  fileHandle = null;
+  $('saveTarget').textContent = 'not saved yet — Save will ask where to put the file (pick products\\)';
+  setStatus('Loaded ' + nameFromFile, false);
+  refresh();
+}
+
+// ---------- save ----------
+async function doSave() {
+  const r = collect();
+  if (!r.ok) return;                       // errors already shown by refresh()
+  const text = JSON.stringify(r.cfg, null, 2) + '\n';
+  try {
+    if (window.showSaveFilePicker) {
+      if (!fileHandle) {
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: r.name + '.json',
+          types: [{ description: 'JSON file', accept: { 'application/json': ['.json'] } }]
+        });
+      }
+      const w = await fileHandle.createWritable();
+      await w.write(text); await w.close();
+      $('saveTarget').textContent = 'saving to: ' + fileHandle.name;
+      setStatus('Saved ' + fileHandle.name + ' — run  .\\run.ps1 -Product ' + r.name, false);
+    } else {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      a.download = r.name + '.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+      setStatus('Downloaded ' + r.name + '.json (browser has no direct file save) — move it into products\\', false);
+    }
+  } catch (err) {
+    if (err.name !== 'AbortError') setStatus('Save failed: ' + err.message, true);
+  }
+}
+
+// ---------- wiring ----------
+$('form').addEventListener('input', refresh);
+$('btnNew').onclick = () => { fillFromJson({}, ''); $('status').textContent = ''; };
+$('btnCopy').onclick = async () => {
+  const r = collect(); if (!r.ok) return;
+  await navigator.clipboard.writeText(JSON.stringify(r.cfg, null, 2));
+  setStatus('JSON copied to clipboard', false);
+};
+$('btnSave').onclick = doSave;
+refresh();
+</script>
+</body>
+</html>

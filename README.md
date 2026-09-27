@@ -21,7 +21,13 @@ run's page is kept as `<name>/<name>.prev.html` (exactly one copy).
 .\run.ps1                 # run the default product (bois)
 .\run.ps1 -Product nvidia # run a specific product
 .\run.ps1 -All            # run every product in products\
+.\run.ps1 -Rerun          # full redo of EVERY product (-Refetch -Retitle -Revision)
+.\run.ps1 -Rerun -Product bois   # full redo of one product only
 ```
+
+`-Rerun` is shorthand for `-Refetch -Retitle -Revision`; without `-Product` it
+applies to all products (like `-All`). `rerun.bat` in the repo root does exactly
+this — double-click it.
 
 ## Adding a new product
 
@@ -139,7 +145,7 @@ run-state (`work\data\<name>\.run_state.json`) plus per-step checkpoints
 (`cls_partial.json`, `vision_partial.json`). **Just re-run `.\run.ps1`** — it prints
 which steps it picks up and how many items are already done, and skips finished ones.
 Force a redo: `.\run.ps1 -Product X -Retitle`, `-Revision`, `-Refetch`, or `-Clean`
-(wipes that product's state and runs from scratch).
+(wipes that product's state and runs from scratch); `-Rerun` forces all three steps.
 
 ## How it works
 

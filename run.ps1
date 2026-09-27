@@ -41,6 +41,11 @@
 
 .PARAMETER Clean
     Clear this product's run state and checkpoints, then run everything from scratch.
+
+.PARAMETER Rerun
+    Full redo: implies -Refetch -Retitle -Revision (all three LLM/fetch steps are
+    forced). Without -Product it reruns EVERY product in products\; with
+    -Product <name> it does the full redo for that one product only.
 #>
 [CmdletBinding()]
 param(
@@ -49,8 +54,14 @@ param(
     [switch]$Refetch,
     [switch]$Retitle,
     [switch]$Revision,
-    [switch]$Clean
+    [switch]$Clean,
+    [switch]$Rerun
 )
+
+if ($Rerun) {
+    $Refetch = $true; $Retitle = $true; $Revision = true
+    if (-not $All -and -not $PSBoundParameters.ContainsKey('Product')) { $All = $true }
+}
 
 $ErrorActionPreference = 'Stop'
 $root  = $PSScriptRoot
