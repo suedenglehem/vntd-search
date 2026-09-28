@@ -11,7 +11,7 @@ GUI:      python product_editor.py
 Headless: python product_editor.py --name rtx3080 --desc "NVIDIA RTX 3080 card" \
               --brands nvidia --pmin 200 --pmax 500 --age 3 --save
 """
-import argparse, copy, io, json, os, re, sys, urllib.request
+import argparse, copy, http.client, io, json, os, re, sys, threading, urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common
@@ -25,14 +25,103 @@ EXAMPLES = {
 
 
 # ----------------------------------------------------------------- LLM ----
-def llm_call(messages, max_tokens=8000, timeout=600):
+# The local model is a *reasoning* model: hidden reasoning is billed against
+# max_tokens and the answer comes last, and an unbounded budget on a big
+# system prompt (spec + two examples) lets it "think" for minutes. So
+# generation is BOUNDED: start at a modest budget, and only if that budget is
+# exhausted (finish_reason 'length' -> empty or truncated answer) escalate to
+# the cap. A hard per-attempt client timeout means the GUI never hangs.
+GEN_LADDER = [4000, 8000]
+GEN_TIMEOUT = 180
+
+
+class Cancelled(Exception):
+    """Raised inside the HTTP worker when the user hits Cancel."""
+
+
+class GenState:
+    """Holds the in-flight HTTP connection + cancel flag for one generation."""
+    def __init__(self):
+        self.conn = None
+        self.cancelled = False
+
+    def cancel(self):
+        """Stop the in-flight request: close the socket (aborts the client
+        read AND tells the server to stop generating) and set the flag so the
+        ladder never starts its next budget level."""
+        self.cancelled = True
+        c = self.conn
+        if c is not None:
+            try:
+                c.close()
+            except Exception:
+                pass
+
+
+def _http_chat(llm, messages, max_tokens, state, timeout=GEN_TIMEOUT):
+    """One chat completion over a worker-thread http.client connection.
+
+    The request runs in a thread (urllib's blocking read cannot be
+    interrupted). `state.conn` holds the connection so Cancel can close it;
+    a closed socket makes the worker raise, which we translate to Cancelled.
+    Returns the parsed response dict; raises Cancelled on cancel, other
+    Exception on network error/timeout."""
+    p = urllib.parse.urlparse(llm['url'])
+    conn = http.client.HTTPConnection(p.hostname, p.port or 80, timeout=timeout)
+    state.conn = conn
+    path = p.path + (('?' + p.query) if p.query else '')
+    headers = common.llm_headers()
+    payload = json.dumps({'model': llm['model'], 'messages': messages,
+                          'temperature': 0.0, 'max_tokens': max_tokens,
+                          'stream': False})
+    result = {'d': None, 'err': None}
+
+    def work():
+        try:
+            conn.request('POST', path, body=payload, headers=headers)
+            r = conn.getresponse()
+            raw = r.read()
+            result['d'] = (r.status, json.loads(raw.decode('utf-8')))
+        except BaseException as e:  # ConnectionResetError/timeout/closed-socket
+            result['err'] = e
+
+    t = threading.Thread(target=work, daemon=True)
+    t.start()
+    t.join(timeout)
+    if t.is_alive():
+        state.cancel()  # hard timeout -> abort like a cancel
+        raise Cancelled()
+    state.conn = None
+    if result['err'] is not None:
+        if state.cancelled:
+            raise Cancelled()
+        raise result['err']
+    status, d = result['d']
+    if status != 200:
+        raise RuntimeError('LLM HTTP %s' % status)
+    return d
+
+
+def llm_call(messages, budgets=GEN_LADDER, timeout=GEN_TIMEOUT, state=None):
+    """Bounded, cancellable generation. Tries each max_tokens budget in order;
+    a budget 'exhausts' when finish_reason is 'length' (empty/truncated
+    answer). Returns (content, finish_reason); finish_reason is 'timeout' if
+    the ladder never produced a non-length response. Raises Cancelled if the
+    user hits Cancel mid-generation."""
+    if state is None:
+        state = GenState()
     llm = common.llm_cfg()
-    body = json.dumps({'model': llm['model'], 'messages': messages,
-                       'temperature': 0.0, 'max_tokens': max_tokens, 'stream': False}).encode('utf-8')
-    req = urllib.request.Request(llm['url'], data=body, headers=common.llm_headers())
-    with urllib.request.urlopen(req, timeout=timeout) as r:
-        d = json.loads(r.read().decode('utf-8'))
-    return d['choices'][0]['message'].get('content', '')
+    content, finish = '', 'timeout'
+    for b in budgets:
+        if state.cancelled:
+            raise Cancelled()
+        d = _http_chat(llm, messages, b, state, timeout)
+        c = d['choices'][0]
+        content = c['message'].get('content', '') or ''
+        finish = c.get('finish_reason')
+        if finish != 'length':
+            break  # complete answer
+    return content, finish
 
 
 def build_system():
@@ -50,7 +139,7 @@ def build_system():
     return "\n".join(parts)
 
 
-def build_user(name, description, brands, pmin, pmax, age, title):
+def build_user(name, description, brands, pmin, pmax, age, max_items, title):
     def n(x, d):
         return ('%g' % x) if x not in (None, '') else d
     return ("Product name (folder): %s\n"
@@ -58,13 +147,14 @@ def build_user(name, description, brands, pmin, pmax, age, title):
             "Brands/makes to search, comma-separated: %s\n"
             "Price range (EUR): %s to %s\n"
             "Age window (months): %s\n"
+            "Max items on the page (max_items): %s\n"
             "Suggested page title: %s\n\n"
             "Choose the class names (primary; secondary and auxiliary ONLY if the "
             "description genuinely calls for them) from the product itself - e.g. for a "
             "graphics card the primary class might be named after the card, not 'blade'. "
             "Produce the complete product JSON object now. Output only JSON."
             % (name, description, brands or '(none)', n(pmin, ''), n(pmax, ''),
-               n(age, 4), title or '(choose a fitting title)'))
+               n(age, 4), n(max_items, 200), title or '(choose a fitting title)'))
 
 
 def extract_json(txt):
@@ -118,30 +208,68 @@ def validate(cfg):
     return None
 
 
-def generate(name, description, brands, pmin, pmax, age, title):
-    """LLM -> (json_text, status). Does NOT save."""
+# The in-flight generation the Cancel button can stop (single-user local GUI).
+_current = None
+
+
+def on_cancel():
+    """Stop the in-flight LLM call, if any. The worker thread aborts and
+    generate() returns a 'Cancelled' status that overwrites this line."""
+    s = _current
+    if s is None:
+        return 'Nothing to cancel.'
+    s.cancel()
+    return 'Stopping the LLM call…'
+
+
+def generate(name, description, brands, pmin, pmax, age, max_items, title, _cancel=None):
+    """LLM -> (json_text, status). Does NOT save. Bounded: never hangs, and
+    cancellable: `_cancel` (a GenState) is what the Cancel button closes."""
+    global _current
     if not (name and description):
         return '', 'Fill at least a product name and a description.'
-    msgs = [{'role': 'system', 'content': build_system()},
-            {'role': 'user', 'content': build_user(name, description, brands, pmin, pmax, age, title)}]
+    state = _cancel or GenState()
+    _current = state
     try:
-        txt = llm_call(msgs)
-    except Exception as e:
-        return '', 'LLM call failed: %s' % e
+        return _gen_body(state, name, description, brands, pmin, pmax, age, max_items, title)
+    finally:
+        if _current is state:
+            _current = None
+
+
+def _gen_body(state, name, description, brands, pmin, pmax, age, max_items, title):
+    msgs = [{'role': 'system', 'content': build_system()},
+            {'role': 'user', 'content': build_user(name, description, brands, pmin, pmax, age, max_items, title)}]
+    try:
+        txt, finish = llm_call(msgs, state=state)
+    except Cancelled:
+        return '', 'Cancelled - the LLM call was stopped. Fix the input and try again.'
+    if finish == 'timeout' and not txt:
+        return '', ('The model did not answer within the time limit (its reasoning '
+                    'ran out of budget). Try again, or shorten the description.')
     js = extract_json(txt)
-    if js is None:
+    # Retry ONLY when the model finished cleanly (finish 'stop') but the reply
+    # wasn't JSON. If the answer was cut off (length) or timed out, a re-roll on
+    # the same large prompt rarely helps and just doubles the wait - so show the
+    # raw text and let the user finish it by hand instead.
+    if js is None and finish == 'stop':
         msgs = msgs + [{'role': 'assistant', 'content': txt},
                        {'role': 'user', 'content':
                         'That was not valid JSON. Output ONLY the JSON object, no prose or fences.'}]
         try:
-            txt2 = llm_call(msgs)
-        except Exception as e:
-            return txt, 'Retry failed: %s' % e
-        js = extract_json(txt2)
-        if js is not None:
-            txt = txt2
+            txt2, _ = llm_call(msgs, state=state)
+        except Cancelled:
+            return '', 'Cancelled - the LLM call was stopped. Fix the input and try again.'
+        js2 = extract_json(txt2)
+        if js2 is not None:
+            txt, js = txt2, js2
     if js is None:
-        return txt, 'Could not parse JSON from the model. Raw reply shown below - edit it, then Save.'
+        why = ('the model spent its whole token budget thinking and never '
+               'produced a full answer' if finish in ('length', 'timeout')
+               else 'the model did not return valid JSON')
+        return txt, 'Could not build the JSON (%s). Raw reply shown below - edit it, then Save.' % why
+    if isinstance(js, dict) and 'max_items' not in js:
+        js['max_items'] = int(max_items) if isinstance(max_items, (int, float)) else 200
     return json.dumps(js, ensure_ascii=False, indent=2), 'Generated. Review / edit, then Save.'
 
 
@@ -167,10 +295,11 @@ def load_existing(name):
     name = (name or '').strip().lower()
     p = os.path.join(PRODUCTS_DIR, name, name + '.json')
     if not os.path.exists(p):
-        return None, None, None, None, '', 'No product named "%s" to load.' % name
+        return None, None, None, None, None, '', 'No product named "%s" to load.' % name
     cfg = json.load(io.open(p, encoding='utf-8'))
     return (', '.join(cfg.get('brands', [])), cfg.get('price_min'), cfg.get('price_max'),
-            cfg.get('age_months', 4), json.dumps(cfg, ensure_ascii=False, indent=2),
+            cfg.get('age_months', 4), cfg.get('max_items', 200),
+            json.dumps(cfg, ensure_ascii=False, indent=2),
             'Loaded %s into the editor.' % name)
 
 
@@ -188,20 +317,24 @@ def launch_gui(server_name='127.0.0.1', server_port=7860, inbrowser=True):
             price_min = gr.Number(label='Price min (EUR)', value=10)
             price_max = gr.Number(label='Price max (EUR)', value=30)
             age = gr.Number(label='Age (months)', value=4)
+            max_items = gr.Number(label='Max items (page cap)', value=200, precision=0)
         brands = gr.Textbox(label='Brands / makes (comma-separated)', placeholder='nvidia')
         title = gr.Textbox(label='Page title (optional - LLM may choose)')
         description = gr.Textbox(label='Description of the product to find', lines=4,
                                  placeholder='e.g. NVIDIA GeForce RTX 3080 graphics card, standalone')
-        gen_btn = gr.Button('Generate JSON with LLM', variant='primary')
+        with gr.Row():
+            gen_btn = gr.Button('Generate JSON with LLM', variant='primary')
+            cancel_btn = gr.Button('Cancel LLM call', variant='secondary')
         out = gr.Textbox(label='product.json (editable)', lines=22)
         status = gr.Markdown()
         save_btn = gr.Button('Save to products/', variant='primary')
         gen_btn.click(generate,
-                      [name, description, brands, price_min, price_max, age, title],
+                      [name, description, brands, price_min, price_max, age, max_items, title],
                       [out, status])
+        cancel_btn.click(on_cancel, None, status)
         save_btn.click(save, [name, out], status)
         load_btn.click(load_existing, [name],
-                       [brands, price_min, price_max, age, out, status])
+                       [brands, price_min, price_max, age, max_items, out, status])
     demo.launch(server_name=server_name, server_port=server_port, inbrowser=inbrowser)
 
 
@@ -214,6 +347,7 @@ def main():
     ap.add_argument('--pmin', type=float)
     ap.add_argument('--pmax', type=float)
     ap.add_argument('--age', type=float)
+    ap.add_argument('--max-items', type=int, default=200)
     ap.add_argument('--title', default='')
     ap.add_argument('--save', action='store_true', help='write the product file')
     ap.add_argument('--json', help='save this exact JSON string (skip LLM)')
@@ -227,7 +361,7 @@ def main():
 
     if args.name and args.desc:  # headless LLM generate (+ optional save)
         text, msg = generate(args.name, args.desc, args.brands,
-                             args.pmin, args.pmax, args.age, args.title)
+                             args.pmin, args.pmax, args.age, args.max_items, args.title)
         print(text)
         print('\n--- status: %s' % msg)
         if args.save:

@@ -19,7 +19,7 @@ SYS = cfg['prompts']['vision_system']
 USER_FMT = cfg['prompts']['vision_user']
 # Small budget for the common case; classify_reply() escalates to 4000 for the
 # few photos whose reasoning exhausts it, then rejects if still empty.
-MAX_TOKENS = cfg.get('vision_max_tokens', 400)
+VISION_LADDER = [cfg.get('vision_max_tokens', 400), ESCALATE_BUDGET]
 KEEP = set(keep_names(cfg))
 WORKERS = cfg.get('vision_workers', 3)
 
@@ -55,7 +55,7 @@ def verify(it):
                                               brand=it.get('listed_brand', ''))},
                     {'type': 'image_url',
                      'image_url': {'url': 'data:image/png;base64,' + b64}}]}]
-    return it['url'], classify_reply(llm, cfg, messages, MAX_TOKENS, timeout=180)
+    return it['url'], classify_reply(llm, cfg, messages, VISION_LADDER, timeout=180)
 
 items = json.load(io.open(os.path.join(D, 'classified.json'), encoding='utf-8'))
 keep = [x for x in items if x['class'] in KEEP]
