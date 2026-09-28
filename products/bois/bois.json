@@ -9,31 +9,32 @@
   "price_max": 30,
   "age_months": 4,
   "max_items": 200,
-  "keep_classes": ["BLADE", "RACKET"],
-  "badges": { "BLADE": "bois", "RACKET": "raquette" },
+  "classes": {
+    "primary":   { "name": "bois",     "def": "a table-tennis blade/wood base without rubber attached (bois, blade, Schlägerholz, madeira sem borracha)" },
+    "secondary": { "name": "raquette", "def": "a finished racket with rubber attached (raquette, schläger, table tennis racket, pala con goma, set containing a racket)" }
+  },
+  "auxiliary": {
+    "name": "gomme",
+    "def": "table-tennis rubber/sheet (revêtement/gomme) without a blade, or rubber+blade combo listed as rubber"
+  },
+  "vars": {
+    "product": "table-tennis blade",
+    "other_note": "anything else: rubber only, balls, apparel, tables, nets, bags, unrelated items",
+    "disambig": "rubber visible = raquette, bare wood = bois"
+  },
+  "badges": { "bois": "bois", "raquette": "raquette" },
   "badge_colors": {
     "bois":     ["#eef6ee", "#2f7d43", "#cfe6d2"],
     "raquette": ["#eef1fd", "#3b56c4", "#d4dcf8"]
   },
-  "vars": {
-    "product": "table-tennis blade",
-    "product_class": {
-      "BLADE":  "a table-tennis blade/wood base without rubber attached (bois, blade, Schlägerholz, madeira sem borracha)",
-      "RACKET": "a finished racket with rubber attached (raquette, schläger, table tennis racket, pala con goma, set containing a racket)"
-    },
-    "auxiliary_class": "RUBBER",
-    "auxiliary_note": "table-tennis rubber/sheet (revêtement/gomme) without a blade, or rubber+blade combo listed as rubber",
-    "other_note": "anything else: rubber only, balls, apparel, tables, nets, bags, unrelated items",
-    "auxiliary_hint": "rubber visible = RACKET, bare wood = BLADE"
-  },
   "prompts": {
-    "title_system": "You classify Vinted {product} listings. Reply with EXACTLY one of: {classes}. {class_defs}. OTHER = {other_note}",
+    "title_system": "You classify Vinted {product} listings. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note}",
     "title_user": "Listing title: \"{title}\"\nSeller brand field: \"{brand}\"\nClassify:",
-    "vision_system": "You are verifying a Vinted {product} listing. You are given the PHOTO of the item and its title. Look at the photo carefully. Decide what the item ACTUALLY is. Reply with EXACTLY one of: {other_classes}. {class_defs}. {auxiliary_class} = {auxiliary_note}. OTHER = {other_note} When in doubt between {keep_classes}, judge from the photo: {auxiliary_hint}",
+    "vision_system": "You are verifying a Vinted {product} listing. You are given the PHOTO of the item and its title. Look at the photo carefully. Decide what the item ACTUALLY is. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note} When in doubt between the kept classes, judge from the photo: {disambig}",
     "vision_user": "Title: \"{title}\"\nSeller brand: \"{brand}\"\nClassify from the photo:",
-    "audit_system": "Look at this photo of a Vinted {product} listing. First describe the main object(s) in the photo in 1-2 sentences (what is it, and which of {other_classes} it looks like). Then on the last line write 'VERDICT: X' where X is one of {other_classes}.",
+    "audit_system": "Look at this photo of a Vinted {product} listing. First describe the main object(s) in the photo in 1-2 sentences (what is it, and which of {all_names} it looks like). Then on the last line write 'VERDICT: X' where X is one of {all_names}.",
     "audit_user": "Title: \"{title}\"\nBrand: \"{brand}\""
   },
-  "title_max_tokens": 300,
-  "vision_max_tokens": 400
+  "title_max_tokens": 1500,
+  "vision_max_tokens": 4000
 }

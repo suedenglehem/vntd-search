@@ -4,7 +4,7 @@ from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import load_product, data_dir, llm_cfg, llm_headers
+from common import load_product, data_dir, llm_cfg, llm_headers, keep_names
 
 sys.stdout.reconfigure(encoding='utf-8')
 PRODUCT = sys.argv[1] if len(sys.argv) > 1 else 'bois'
@@ -14,7 +14,7 @@ llm = llm_cfg()
 
 SYS = cfg['prompts']['audit_system']
 USER_FMT = cfg['prompts']['audit_user']
-KEEP = set(cfg.get('keep_classes', ['BLADE', 'RACKET']))
+KEEP = set(keep_names(cfg))
 
 def fetch_img_png_b64(url):
     req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0',
@@ -39,7 +39,8 @@ def look(url):
             {'type': 'text', 'text': USER_FMT.format(
                 title=it['title_clean'], brand=it.get('listed_brand', ''))},
             {'type': 'image_url', 'image_url': {'url': 'data:image/png;base64,' + b64}}]}],
-        'max_tokens': 500, 'temperature': 0.0, 'stream': False}).encode()
+        # generous budget: the local model's reasoning counts against it
+        'max_tokens': 2000, 'temperature': 0.0, 'stream': False}).encode()
     for attempt in range(3):
         try:
             r = urllib.request.Request(llm['url'], data=body, headers=llm_headers())

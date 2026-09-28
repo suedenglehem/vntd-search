@@ -3,7 +3,7 @@ import re, io, os, sys, json, time, urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import load_product, data_dir, llm_cfg, llm_headers, cutoff_for
+from common import load_product, data_dir, llm_cfg, llm_headers, cutoff_for, parse_reply
 
 sys.stdout.reconfigure(encoding='utf-8')
 PRODUCT = sys.argv[1] if len(sys.argv) > 1 else 'bois'
@@ -15,7 +15,10 @@ CUTOFF_ID, CUTOFF_DATE = cutoff_for(cfg)
 P_MIN, P_MAX = cfg['price_min'], cfg['price_max']
 SYS = cfg['prompts']['title_system']
 USER_FMT = cfg['prompts']['title_user']
-MAX_TOKENS = cfg.get('title_max_tokens', 300)
+# The local model is a *thinking* model: part of the completion budget is spent
+# on reasoning_content before the answer. If the budget runs out the answer
+# (content) comes back empty, so defaults are generous.
+MAX_TOKENS = cfg.get('title_max_tokens', 1500)
 WORKERS = cfg.get('workers', 4)
 
 items = json.load(io.open(os.path.join(D, 'merged.json'), encoding='utf-8'))
@@ -51,11 +54,10 @@ def llm_classify(it):
             req = urllib.request.Request(llm['url'], data=body, headers=llm_headers())
             with urllib.request.urlopen(req, timeout=120) as r:
                 d = json.loads(r.read().decode('utf-8'))
-            txt = d['choices'][0]['message'].get('content', '').strip().upper()
-            for k in ('BLADE', 'RACKET', 'RUBBER', 'OTHER'):
-                if k in txt:
-                    return it['url'], k
-            return it['url'], 'OTHER'
+            txt = d['choices'][0]['message'].get('content', '').strip()
+            if not txt:  # thinking ate the whole budget -> retry
+                raise RuntimeError('empty reply')
+            return it['url'], parse_reply(cfg, txt)
         except Exception:
             time.sleep(2 + attempt * 2)
     return it['url'], 'ERROR'

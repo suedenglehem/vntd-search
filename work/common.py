@@ -38,41 +38,86 @@ def load_product(name):
     return cfg
 
 
+# ------------------------------------------------------------- classes ----
+# A product defines its own free-form class names (e.g. "bois"/"raquette" for
+# table tennis, "rtx 3080"/"other nvidia card" for GPUs) in the "classes"
+# object: "primary" (always kept) + optional "secondary" (also kept) and an
+# optional "auxiliary" trap class (never kept). OTHER is the universal reject
+# word, fixed for all products. The LLM reply is parsed against these names.
+
+REJECT_CLASS = 'OTHER'
+
+
+def keep_names(cfg):
+    """Class names that count as the product: primary + secondary (when set)."""
+    out = []
+    for slot in ('primary', 'secondary'):
+        c = (cfg.get('classes') or {}).get(slot) or {}
+        if c.get('name'):
+            out.append(c['name'])
+    return out
+
+
+def aux_class(cfg):
+    """The auxiliary (trap) class dict, or None when the product has none."""
+    a = cfg.get('auxiliary') or {}
+    return a if a.get('name') else None
+
+
+def all_names(cfg):
+    """Every class name the model may reply: keep names + auxiliary (when set)."""
+    a = aux_class(cfg)
+    return keep_names(cfg) + ([a['name']] if a else [])
+
+
+def parse_reply(cfg, txt):
+    """Match a model reply to the product's class names.
+
+    Plain substring match, longest name first (so a multi-word name wins over a
+    shorter name it contains). Falls back to OTHER when nothing matches.
+    """
+    t = (txt or '').upper()
+    for name in sorted(all_names(cfg) + [REJECT_CLASS], key=len, reverse=True):
+        if name.upper() in t:
+            return REJECT_CLASS if name == REJECT_CLASS else name
+    return REJECT_CLASS
+
+
 def _fill_prompts(cfg):
     """Expand product variables into the prompt templates so the 'prompts'
     block stays generic and reusable across products.
 
-    Variables (from the 'vars' section + values derived from the config):
-      {product}          product label, e.g. "table-tennis blade"
-      {classes}          keep_classes joined, e.g. "BLADE, RACKET"
-      {other_classes}    keep_classes + auxiliary_class (when defined),
-                         e.g. "BLADE, RACKET, RUBBER"; just keep_classes when
-                         the product has no auxiliary class
-      {class_defs}       "BLADE = <def>. RACKET = <def>" from vars.product_class
-      {auxiliary_class}  vars.auxiliary_class (optional; absent for products
-                         with a single kept class)
-      {auxiliary_note}   vars.auxiliary_note (optional)
-      {other_note}       vars.other_note
-      {auxiliary_hint}   vars.auxiliary_hint (optional)
+    Variables (from the 'vars' section + values derived from the 'classes'
+    object):
+      {product}      product label (vars.product)
+      {keep_names}   primary + secondary class names joined, e.g. "bois and raquette"
+      {all_names}    keep names + auxiliary (when set), e.g. "bois, raquette, gomme"
+      {class_defs}   "BOIS = <def>. RAQUETTE = <def>" from the classes defs
+      {aux_name}     auxiliary class name (optional)
+      {aux_def}      auxiliary class definition (optional)
+      {other_note}   vars.other_note
     Runtime-only placeholders ({title}, {brand}) are left untouched for the
     per-item .format() call in each pipeline step.
     """
     vars_ = cfg.get('vars', {})
-    keep = cfg.get('keep_classes', [])
-    product_class = vars_.get('product_class', {})
-    class_defs = ' '.join('%s = %s' % (k, product_class[k])
-                          for k in keep if k in product_class)
-    aux = [vars_['auxiliary_class']] if 'auxiliary_class' in vars_ else []
+    keep = keep_names(cfg)
+    aux = aux_class(cfg)
+    class_defs = ' '.join('%s = %s' % ((cfg['classes'][s])['name'].upper(),
+                                       (cfg['classes'][s])['def'])
+                          for s in ('primary', 'secondary')
+                          if (cfg.get('classes') or {}).get(s, {}).get('name'))
     class _Keep(dict):
         """Missing keys stay as literal {key} (runtime placeholders like {title})."""
         def __missing__(self, key):
             return '{' + key + '}'
 
     fmt = _Keep(vars_)
-    fmt['classes'] = ', '.join(keep)
-    fmt['keep_classes'] = ' and '.join(keep)
-    fmt['other_classes'] = ', '.join(keep + aux)
+    fmt['keep_names'] = ' and '.join(keep)
+    fmt['all_names'] = ', '.join(keep + ([aux['name']] if aux else []))
     fmt['class_defs'] = class_defs
+    if aux:
+        fmt['aux_name'] = aux['name']
+        fmt['aux_def'] = aux.get('def', '')
     prompts = cfg.get('prompts', {})
     for k, v in prompts.items():
         prompts[k] = v.format_map(fmt)

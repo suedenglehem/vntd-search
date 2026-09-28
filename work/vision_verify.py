@@ -7,7 +7,7 @@ from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import load_product, data_dir, llm_cfg, llm_headers
+from common import load_product, data_dir, llm_cfg, llm_headers, parse_reply, keep_names
 
 sys.stdout.reconfigure(encoding='utf-8')
 PRODUCT = sys.argv[1] if len(sys.argv) > 1 else 'bois'
@@ -17,8 +17,10 @@ llm = llm_cfg()
 
 SYS = cfg['prompts']['vision_system']
 USER_FMT = cfg['prompts']['vision_user']
-MAX_TOKENS = cfg.get('vision_max_tokens', 400)
-KEEP = set(cfg.get('keep_classes', ['BLADE', 'RACKET']))
+# The local model is a *thinking* model: reasoning_content is counted against
+# max_tokens, so a small budget can leave the actual answer (content) empty.
+MAX_TOKENS = cfg.get('vision_max_tokens', 4000)
+KEEP = set(keep_names(cfg))
 WORKERS = cfg.get('vision_workers', 3)
 
 def fetch_img_png_b64(url):
@@ -52,11 +54,10 @@ def verify(it):
             req = urllib.request.Request(llm['url'], data=body, headers=llm_headers())
             with urllib.request.urlopen(req, timeout=180) as r:
                 d = json.loads(r.read().decode('utf-8'))
-            txt = d['choices'][0]['message'].get('content', '').strip().upper()
-            for k in ('BLADE', 'RACKET', 'RUBBER', 'OTHER'):
-                if k in txt:
-                    return it['url'], k
-            return it['url'], 'OTHER'
+            txt = d['choices'][0]['message'].get('content', '').strip()
+            if not txt:  # thinking ate the whole budget -> retry
+                raise RuntimeError('empty reply')
+            return it['url'], parse_reply(cfg, txt)
         except Exception as e:
             if attempt == 2:
                 return it['url'], 'ERROR:' + str(e)[:60]

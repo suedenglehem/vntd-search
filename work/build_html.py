@@ -3,7 +3,7 @@ import json, io, os, sys, html, re
 from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import load_product, data_dir, out_dir, cutoff_for
+from common import load_product, data_dir, out_dir, cutoff_for, keep_names
 
 sys.stdout.reconfigure(encoding='utf-8')
 PRODUCT = sys.argv[1] if len(sys.argv) > 1 else 'bois'
@@ -16,7 +16,7 @@ ALIASES = cfg.get('brand_aliases', {})
 KNOWN = {b.lower(): ALIASES.get(b, b[0].upper() + b[1:]) for b in cfg['brands']}
 BRAND_ORDER = cfg.get('brand_order', sorted(set(KNOWN.values())))
 OTHER = cfg.get('other_label', 'Other')
-KEEP = set(cfg.get('keep_classes', ['BLADE', 'RACKET']))
+KEEP = set(keep_names(cfg))
 BADGES = cfg.get('badges', {})
 BADGE_COLORS = cfg.get('badge_colors', {})
 

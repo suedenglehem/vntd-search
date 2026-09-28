@@ -1,0 +1,52 @@
+{
+  "title": "NVIDIA GeForce RTX 3080",
+  "subtitle": "cartes RTX 3080 / 3080 Ti vérifiées sur photo (autres GPU NVIDIA écartés)",
+  "legend": "<b>rtx 3080</b> = carte RTX 3080 ou 3080 Ti",
+  "brands": [
+    "nvidia"
+  ],
+  "brand_aliases": {
+    "nvidia": "NVIDIA"
+  },
+  "brand_order": [
+    "NVIDIA"
+  ],
+  "price_min": 200,
+  "price_max": 500,
+  "age_months": 3,
+  "max_items": 200,
+  "classes": {
+    "primary": {
+      "name": "rtx 3080",
+      "def": "an NVIDIA GeForce RTX 3080 or RTX 3080 Ti graphics card (carte graphique / Grafikkarte / scheda video), standalone card only - the model must be 3080 or 3080 Ti, any brand's cooler"
+    }
+  },
+  "auxiliary": {
+    "name": "other nvidia card",
+    "def": "a DIFFERENT NVIDIA GPU, not a 3080/3080 Ti: RTX 3090/3070/2080/1080, RTX 4080/4090, GTX 1660, etc."
+  },
+  "vars": {
+    "product": "NVIDIA GeForce RTX 3080 graphics card",
+    "other_note": "anything else: non-NVIDIA GPUs (AMD Radeon, Intel), whole PCs, PC cases, power supplies, cables, monitors, unrelated items"
+  },
+  "badges": {
+    "rtx 3080": "rtx 3080"
+  },
+  "badge_colors": {
+    "rtx 3080": [
+      "#eef6ee",
+      "#2f7d43",
+      "#cfe6d2"
+    ]
+  },
+  "prompts": {
+    "title_system": "You classify Vinted {product} listings. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note}",
+    "title_user": "Listing title: \"{title}\"\nSeller brand field: \"{brand}\"\nClassify:",
+    "vision_system": "You are verifying a Vinted {product} listing. You are given the PHOTO of the item and its title. Look at the photo carefully. Decide what the item ACTUALLY is. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note} When in doubt, the model number printed on the card's cooler or in the title decides: 3080 / 3080 Ti = rtx 3080, any other model = other nvidia card",
+    "vision_user": "Title: \"{title}\"\nSeller brand: \"{brand}\"\nClassify from the photo:",
+    "audit_system": "Look at this photo of a Vinted {product} listing. First describe the main object(s) in the photo in 1-2 sentences (what is it, and which of {all_names} it looks like). Then on the last line write 'VERDICT: X' where X is one of {all_names}.",
+    "audit_user": "Title: \"{title}\"\nBrand: \"{brand}\""
+  },
+  "title_max_tokens": 1500,
+  "vision_max_tokens": 4000
+}
