@@ -1,6 +1,7 @@
 {
   "title": "NVIDIA GeForce RTX 3080",
   "subtitle": "cartes RTX 3080 / 3080 Ti vérifiées sur photo (autres GPU NVIDIA écartés)",
+  "description": "NVIDIA GeForce RTX 3080 or RTX 3080 Ti graphics card, standalone",
   "legend": "<b>rtx 3080</b> = carte RTX 3080 ou 3080 Ti",
   "brands": [
     "nvidia"
@@ -13,12 +14,13 @@
   ],
   "price_min": 200,
   "price_max": 500,
-  "age_months": 3,
-  "max_items": 200,
+  "age_months": 1,
+  "max_items": 10,
+  "keep_days": 2,
   "classes": {
     "primary": {
       "name": "rtx 3080",
-      "def": "an NVIDIA GeForce RTX 3080 or RTX 3080 Ti graphics card (carte graphique / Grafikkarte / scheda video), standalone card only - the model must be 3080 or 3080 Ti, any brand's cooler"
+      "def": "an NVIDIA GeForce RTX 3080 or RTX 3080 Ti graphics card (carte graphique, Grafikkarte, scheda video, tarjeta gráfica), standalone — the model must be 3080 or 3080 Ti, any brand's cooler"
     }
   },
   "auxiliary": {
@@ -27,7 +29,7 @@
   },
   "vars": {
     "product": "NVIDIA GeForce RTX 3080 graphics card",
-    "other_note": "anything else: non-NVIDIA GPUs (AMD Radeon, Intel), whole PCs, PC cases, power supplies, cables, monitors, unrelated items"
+    "other_note": "anything else: non-NVIDIA GPUs (AMD Radeon, Intel), PC cases, power supplies, cables, monitors, unrelated items"
   },
   "badges": {
     "rtx 3080": "rtx 3080"

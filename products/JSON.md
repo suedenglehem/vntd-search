@@ -110,6 +110,7 @@ fall back to the defaults shown.
 | `title`    | string, **required** | Page `<title>` and `<h1>`. e.g. `"Bois & raquettes de tennis de table"` or `"NVIDIA GeForce RTX 3080"`. |
 | `subtitle` | string, optional | One line under the heading, **escaped as plain text** (no HTML). Describes the filtering, e.g. `"annonces vérifiées sur photo (raquettes et revêtements écartés)"`. |
 | `legend`   | string, optional | Badge legend. **Inserted raw** — the only config field that may contain HTML. e.g. `"<b>bois</b> = lame seule · <b>raquette</b> = raquette complète"`. |
+| `description` | string, optional | Plain-English "what to find" for this product (what the product editor shows in its Description field). The pipeline ignores it; it exists so the editor can re-load and re-generate the config. |
 
 ### Brands (search + grouping)
 
