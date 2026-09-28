@@ -137,20 +137,61 @@ def out_dir(name):
 
 
 def llm_cfg():
-    """LLM endpoint/model/key: set by run.ps1 from config.json; defaults below."""
-    url = os.environ.get('VT_LLM_URL', 'http://127.0.0.1:1234').rstrip('/')
+    """LLM endpoint/model: env vars (set by run.ps1) win, else config.json,
+    else defaults. The editor runs standalone (no env vars), so it uses
+    config.json's llm_url / model directly."""
+    g = _global_cfg()
+    url = (os.environ.get('VT_LLM_URL') or g.get('llm_url')
+           or 'http://127.0.0.1:1234').rstrip('/')
     return {
         'url': url + '/v1/chat/completions',
-        'model': os.environ.get('VT_LLM_MODEL', 'unsloth/qwen3.8-27b'),
+        'model': (os.environ.get('VT_LLM_MODEL') or g.get('model')
+                  or 'unsloth/qwen3.8-27b'),
     }
 
 
 def llm_headers():
     h = {'Content-Type': 'application/json'}
-    key = os.environ.get('VT_LLM_API_KEY', '')
+    key = (os.environ.get('VT_LLM_API_KEY') or _global_cfg().get('api_key') or '')
     if key:
         h['Authorization'] = 'Bearer ' + key
     return h
+
+
+def list_models(timeout=6):
+    """Query the server for its ACTUALLY-LOADED models. Returns
+    (models, current, error): `models` = sorted ids of models currently in
+    memory, `current` = the configured model (may not be loaded), `error` =
+    a short message if the server can't be reached (models/current still
+    returned). Used by the editor to show what is ACTUALLY running, not just
+    what config.json says.
+
+    Prefers LM Studio's native /api/v0/models (each entry carries a
+    `state` of 'loaded'/'not-loaded'); the OpenAI /v1/models endpoint lists
+    the whole library with no loaded flag, so it is only a fallback."""
+    cfg = llm_cfg()
+    base = cfg['url'].split('/v1/')[0]
+    cur = cfg['model']
+    try:
+        req = urllib.request.Request(base + '/api/v0/models', headers=llm_headers())
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            d = json.loads(r.read().decode('utf-8'))
+        loaded = [{'id': m['id'], 'ctx': m.get('loaded_context_length') or 0}
+                  for m in d.get('data', [])
+                  if m.get('id') and m.get('state') == 'loaded']
+        loaded.sort(key=lambda m: m['id'])
+        return loaded, cur, None
+    except Exception:
+        pass
+    try:  # non-LM-Studio server: no loaded flag, so report the whole library
+        req = urllib.request.Request(base + '/v1/models', headers=llm_headers())
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            d = json.loads(r.read().decode('utf-8'))
+        loaded = [{'id': m['id'], 'ctx': 0} for m in d.get('data', []) if m.get('id')]
+        loaded.sort(key=lambda m: m['id'])
+        return loaded, cur, None
+    except Exception as e:
+        return [], cur, str(e)
 
 
 # The local model is a *reasoning* model: hidden reasoning is billed against

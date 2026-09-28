@@ -58,7 +58,7 @@ class GenState:
                 pass
 
 
-def _http_chat(llm, messages, max_tokens, state, timeout=GEN_TIMEOUT):
+def _http_chat(llm, messages, max_tokens, state, timeout=GEN_TIMEOUT, model=None):
     """One chat completion over a worker-thread http.client connection.
 
     The request runs in a thread (urllib's blocking read cannot be
@@ -71,7 +71,8 @@ def _http_chat(llm, messages, max_tokens, state, timeout=GEN_TIMEOUT):
     state.conn = conn
     path = p.path + (('?' + p.query) if p.query else '')
     headers = common.llm_headers()
-    payload = json.dumps({'model': llm['model'], 'messages': messages,
+    model = (model or '').strip() or llm['model']
+    payload = json.dumps({'model': model, 'messages': messages,
                           'temperature': 0.0, 'max_tokens': max_tokens,
                           'stream': False})
     result = {'d': None, 'err': None}
@@ -102,12 +103,13 @@ def _http_chat(llm, messages, max_tokens, state, timeout=GEN_TIMEOUT):
     return d
 
 
-def llm_call(messages, budgets=GEN_LADDER, timeout=GEN_TIMEOUT, state=None):
+def llm_call(messages, budgets=GEN_LADDER, timeout=GEN_TIMEOUT, state=None, model=None):
     """Bounded, cancellable generation. Tries each max_tokens budget in order;
     a budget 'exhausts' when finish_reason is 'length' (empty/truncated
     answer). Returns (content, finish_reason); finish_reason is 'timeout' if
     the ladder never produced a non-length response. Raises Cancelled if the
-    user hits Cancel mid-generation."""
+    user hits Cancel mid-generation. `model` overrides the configured model
+    (the editor's model dropdown)."""
     if state is None:
         state = GenState()
     llm = common.llm_cfg()
@@ -115,7 +117,7 @@ def llm_call(messages, budgets=GEN_LADDER, timeout=GEN_TIMEOUT, state=None):
     for b in budgets:
         if state.cancelled:
             raise Cancelled()
-        d = _http_chat(llm, messages, b, state, timeout)
+        d = _http_chat(llm, messages, b, state, timeout, model=model)
         c = d['choices'][0]
         content = c['message'].get('content', '') or ''
         finish = c.get('finish_reason')
@@ -222,26 +224,27 @@ def on_cancel():
     return 'Stopping the LLM call…'
 
 
-def generate(name, description, brands, pmin, pmax, age, max_items, title, _cancel=None):
+def generate(name, description, brands, pmin, pmax, age, max_items, title, model=None, _cancel=None):
     """LLM -> (json_text, status). Does NOT save. Bounded: never hangs, and
-    cancellable: `_cancel` (a GenState) is what the Cancel button closes."""
+    cancellable: `_cancel` (a GenState) is what the Cancel button closes.
+    `model` is the editor's selected model (overrides config.json)."""
     global _current
     if not (name and description):
         return '', 'Fill at least a product name and a description.'
     state = _cancel or GenState()
     _current = state
     try:
-        return _gen_body(state, name, description, brands, pmin, pmax, age, max_items, title)
+        return _gen_body(state, name, description, brands, pmin, pmax, age, max_items, title, model)
     finally:
         if _current is state:
             _current = None
 
 
-def _gen_body(state, name, description, brands, pmin, pmax, age, max_items, title):
+def _gen_body(state, name, description, brands, pmin, pmax, age, max_items, title, model=None):
     msgs = [{'role': 'system', 'content': build_system()},
             {'role': 'user', 'content': build_user(name, description, brands, pmin, pmax, age, max_items, title)}]
     try:
-        txt, finish = llm_call(msgs, state=state)
+        txt, finish = llm_call(msgs, state=state, model=model)
     except Cancelled:
         return '', 'Cancelled - the LLM call was stopped. Fix the input and try again.'
     if finish == 'timeout' and not txt:
@@ -257,7 +260,7 @@ def _gen_body(state, name, description, brands, pmin, pmax, age, max_items, titl
                        {'role': 'user', 'content':
                         'That was not valid JSON. Output ONLY the JSON object, no prose or fences.'}]
         try:
-            txt2, _ = llm_call(msgs, state=state)
+            txt2, _ = llm_call(msgs, state=state, model=model)
         except Cancelled:
             return '', 'Cancelled - the LLM call was stopped. Fix the input and try again.'
         js2 = extract_json(txt2)
@@ -319,9 +322,42 @@ def clear():
 def launch_gui(server_name='127.0.0.1', server_port=7860, inbrowser=True):
     import gradio as gr
     llm = common.llm_cfg()
+
+    def query_models():
+        """Query the server for its ACTUALLY-LOADED models. Returns (choices,
+        value, markdown). Shows what is running, not just what config.json
+        says; if the configured model isn't loaded, pick the largest loaded
+        model (the one that can do real work)."""
+        loaded, cur, err = common.list_models()
+        ids = [m['id'] for m in loaded]
+        base = llm['url'].split('/v1/')[0]
+        if err:
+            return [cur], cur, ('LLM server: `%s`\n\n⚠ could not query the server: %s'
+                                % (base, err))
+        if not ids:
+            return [cur], cur, ('LLM server: `%s`\n\nNo models loaded on the server.'
+                                % base)
+        choices = list(ids)  # ONLY models actually loaded on the server
+        if cur in ids:
+            value, note = cur, ''
+        else:
+            best = max(loaded, key=lambda m: m['ctx'])
+            value = best['id']
+            note = ('\n⚠ configured model `%s` is NOT loaded — using `%s` (%d ctx). '
+                    'Switch the model in LM Studio or pick one above.'
+                    % (cur, value, best['ctx']))
+        return (choices, value, 'LLM server: `%s`%s' % (base, note))
+
+    init_choices, init_model, init_info = query_models()
+
     with gr.Blocks(title='Vinted Product JSON Editor') as demo:
-        gr.Markdown('# Vinted product JSON editor\n'
-                    'LLM: `%s` @ `%s`' % (llm['model'], llm['url']))
+        gr.Markdown('# Vinted product JSON editor')
+        with gr.Row():
+            model_dd = gr.Dropdown(label='Model (loaded on the LLM server)',
+                                   choices=init_choices, value=init_model,
+                                   allow_custom_value=True, scale=4)
+            refresh_btn = gr.Button('Refresh models')
+        model_info = gr.Markdown(init_info)
         with gr.Row():
             name = gr.Textbox(label='Product name (folder)', placeholder='rtx3080')
             load_btn = gr.Button('Load existing')
@@ -341,8 +377,12 @@ def launch_gui(server_name='127.0.0.1', server_port=7860, inbrowser=True):
         out = gr.Textbox(label='product.json (editable)', lines=22)
         status = gr.Markdown()
         save_btn = gr.Button('Save to products/', variant='primary')
+        def do_refresh():
+            choices, value, info = query_models()
+            return gr.Dropdown.update(choices=choices, value=value), info
+        refresh_btn.click(do_refresh, None, [model_dd, model_info])
         gen_btn.click(generate,
-                      [name, description, brands, price_min, price_max, age, max_items, title],
+                      [name, description, brands, price_min, price_max, age, max_items, title, model_dd],
                       [out, status])
         cancel_btn.click(on_cancel, None, status)
         save_btn.click(save, [name, out], status)

@@ -1,0 +1,53 @@
+{
+  "title": "AMD Ryzen Threadripper (CPU seul)",
+  "subtitle": "annonces vérifiées sur photo (autres CPU AMD et composants écartés)",
+  "legend": "<b>threadripper</b> = processeur AMD Threadripper / Threadripper PRO seul",
+  "brands": [
+    "amd"
+  ],
+  "brand_aliases": {
+    "amd": "AMD"
+  },
+  "brand_order": [
+    "AMD"
+  ],
+  "price_min": 50,
+  "price_max": 200,
+  "age_months": 4,
+  "max_items": 10,
+  "keep_days": 200,
+  "classes": {
+    "primary": {
+      "name": "threadripper",
+      "def": "a standalone AMD Ryzen Threadripper or Threadripper PRO processor (processeur / CPU seul / Prozessor / processador / procesador), sold by itself — includes older Threadripper parts and newer Ryzen Threadripper/Threadripper PRO chips, not a motherboard, complete PC, or bundle"
+    }
+  },
+  "auxiliary": {
+    "name": "other amd cpu",
+    "def": "a different AMD processor that is NOT a Threadripper/Threadripper PRO: Ryzen desktop CPUs without 'Threadripper' (Ryzen 3/5/7/9), EPYC server CPUs, A-series/APU chips"
+  },
+  "vars": {
+    "product": "AMD Ryzen Threadripper CPU",
+    "other_note": "anything else: Intel or non-AMD CPUs, motherboards, RAM, GPUs, complete PCs, cases, power supplies, cables, unrelated items"
+  },
+  "badges": {
+    "threadripper": "threadripper"
+  },
+  "badge_colors": {
+    "threadripper": [
+      "#eef6ee",
+      "#2f7d43",
+      "#cfe6d2"
+    ]
+  },
+  "prompts": {
+    "title_system": "You classify Vinted {product} listings. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note}",
+    "title_user": "Listing title: \"{title}\"\nSeller brand field: \"{brand}\"\nClassify:",
+    "vision_system": "You are verifying a Vinted {product} listing. You are given the PHOTO of the item and its title. Look at the photo carefully. Decide what the item ACTUALLY is. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note} When in doubt, the printed CPU model name decides: 'Threadripper', 'Ryzen Threadripper', or 'Threadripper PRO' = threadripper; any other AMD CPU (plain Ryzen, EPYC) = other amd cpu",
+    "vision_user": "Title: \"{title}\"\nSeller brand: \"{brand}\"\nClassify from the photo:",
+    "audit_system": "Look at this photo of a Vinted {product} listing. First describe the main object(s) in the photo in 1-2 sentences (what is it, and which of {all_names} it looks like). Then on the last line write 'VERDICT: X' where X is one of {all_names}.",
+    "audit_user": "Title: \"{title}\"\nBrand: \"{brand}\""
+  },
+  "title_max_tokens": 300,
+  "vision_max_tokens": 400
+}
