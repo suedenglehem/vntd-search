@@ -1,7 +1,8 @@
 """Shared helpers: product config, paths, LLM settings.
 
-A "product" is one Vinted search profile defined in <root>/products/<name>.json
-(e.g. products/bois.json -> searches table-tennis blades, outputs bois/bois.html).
+A "product" is one Vinted search profile defined in <root>/products/<name>/<name>.json
+(e.g. products/bois/bois.json -> searches table-tennis blades, outputs
+products/bois/vinted/bois.html).
 """
 import json, io, os, sys
 from datetime import date, timedelta
@@ -12,10 +13,10 @@ PRODUCTS_DIR = os.path.join(ROOT, 'products')
 
 
 def load_product(name):
-    p = os.path.join(PRODUCTS_DIR, name + '.json')
+    p = os.path.join(PRODUCTS_DIR, name, name + '.json')
     if not os.path.exists(p):
-        available = sorted(f[:-5] for f in os.listdir(PRODUCTS_DIR) if f.endswith('.json')) \
-            if os.path.isdir(PRODUCTS_DIR) else []
+        available = sorted(d for d in (os.listdir(PRODUCTS_DIR) if os.path.isdir(PRODUCTS_DIR) else [])
+                           if os.path.isfile(os.path.join(PRODUCTS_DIR, d, d + '.json')))
         sys.exit('unknown product "%s" (available: %s)' % (name, ', '.join(available) or 'none'))
     cfg = json.load(io.open(p, encoding='utf-8'))
     cfg['name'] = name
@@ -70,7 +71,8 @@ def data_dir(name):
 
 
 def out_dir(name):
-    d = os.path.join(ROOT, name)
+    """Per-product result folder: products/<name>/vinted (config is a sibling)."""
+    d = os.path.join(PRODUCTS_DIR, name, 'vinted')
     os.makedirs(d, exist_ok=True)
     return d
 

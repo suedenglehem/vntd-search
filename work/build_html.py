@@ -1,6 +1,6 @@
 """Step 4: merge verdicts and build the product HTML page (cards grouped by brand)."""
 import json, io, os, sys, html, re
-from datetime import date
+from datetime import date, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from common import load_product, data_dir, out_dir, cutoff_for
@@ -123,6 +123,8 @@ for b in order:
     rows_html.append('</div>')
     rows_html.append('</section>')
 
+TODAY = date.today()
+KEEP_DAYS = int(cfg.get('keep_days', 2))
 cutoff_id, cutoff_date = cutoff_for(cfg)
 TPL = """<!DOCTYPE html>
 <html lang="fr">
@@ -164,7 +166,7 @@ TPL = """<!DOCTYPE html>
   @@LEGEND@@
   Cliquer sur une carte ouvre l'annonce sur Vinted.</div>
 @@ROWS@@
-  <div class="foot">Généré le @@TODAY@@ à partir des pages de recherche Vinted.fr (une page ≈ 96 annonces/marque).
+  <div class="foot">Recherche du @@TODAY@@, à partir des pages de recherche Vinted.fr (une page ≈ 96 annonces/marque).
   Âge estimé via l'identifiant de l'annonce (±1–2 mois) — Vinted n'expose pas la date de publication.</div>
 </body>
 </html>
@@ -180,10 +182,26 @@ html_out = (TPL
             .replace('@@SUBTITLE@@', esc(cfg.get('subtitle', '')))
             .replace('@@LEGEND@@', cfg.get('legend', ''))
             .replace('@@ROWS@@', '\n'.join(rows_html))
-            .replace('@@TODAY@@', esc(str(date.today()))))
+            .replace('@@TODAY@@', esc(TODAY.strftime('%d/%m/%Y'))))
 
 outdir = out_dir(PRODUCT)
-out = os.path.join(outdir, PRODUCT + '.html')
+
+# prune dated results older than KEEP_DAYS days (rotation replaces .prev.html)
+pat = re.compile(r'^%s_(\d{2})\.(\d{2})\.(\d{2})\.html$' % re.escape(PRODUCT))
+cutoff = TODAY - timedelta(days=KEEP_DAYS)
+for f in os.listdir(outdir):
+    m = pat.match(f)
+    if not m:
+        continue
+    try:
+        fdate = date(2000 + int(m.group(3)), int(m.group(2)), int(m.group(1)))
+    except ValueError:
+        continue
+    if fdate < cutoff:
+        os.remove(os.path.join(outdir, f))
+        print('pruned old result: %s' % f)
+
+out = os.path.join(outdir, '%s_%s.html' % (PRODUCT, TODAY.strftime('%d.%m.%y')))
 io.open(out, 'w', encoding='utf-8').write(html_out)
 print('wrote %s (%d bytes)' % (out, len(html_out)))
 print('per brand: %s' % {b: len(groups[b]) for b in order})

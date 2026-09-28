@@ -12,10 +12,12 @@ self-contained HTML page organized by brand. Every listing is verified **on its 
 by a local LLM, so items that sellers mislabel (e.g. rubbers sold as "raquette", or
 unrelated gear) get dropped.
 
-**Generic & multi-product**: one config file per product in `products/`
-(brands, price range, age window, LLM prompts, labels). Output goes into a
-folder per product: `bois/bois.html`, `nvidia/nvidia.html`, etc. The previous
-run's page is kept as `<name>/<name>.prev.html` (exactly one copy).
+**Generic & multi-product**: one folder per product in `products/`, holding its
+config `<name>/<name>.json` (brands, price range, age window, LLM prompts,
+labels). Results go into the same product's `vinted/` subfolder, named with
+the search date (french format): `products/bois/vinted/bois_28.09.26.html`,
+etc. The page shows its request date in the footer. Previous days' pages are
+kept per the product's `keep_days` (default 2 — i.e. today + yesterday).
 
 ```
 .\run.ps1                 # run the default product (bois)
@@ -31,7 +33,8 @@ this — double-click it.
 
 ## Adding a new product
 
-Copy `products/bois.json` to `products/<name>.json` and edit. Every variable:
+Copy `products/bois/bois.json` to `products/<name>/<name>.json` (one folder per
+product) and edit. Every variable:
 
 ### `title` *(string, required)*
 Page `<title>` and `<h1>`. Example: `"Bois & raquettes de tennis de table"`.
@@ -75,6 +78,11 @@ ID→date fit (`work/id_date_fit.json`, see "Age filter" below). Effective preci
 
 ### `max_items` *(number, default 200)*
 Page cap. If more items pass all filters, the most recent (highest ID) are kept.
+
+### `keep_days` *(number, default 2)*
+How many days of dated result pages to keep in `products/<name>/vinted/`.
+`build_html.py` prunes older `<name>_DD.MM.YY.html` files on every run. Raise
+it (e.g. `10`) to keep a longer history.
 
 ### `keep_classes` *(string array, default `["BLADE","RACKET"]`)*
 Which LLM classes count as "your product". Both the title stage output and the
@@ -135,7 +143,7 @@ against the actual photo. Keep the one-word reply contract.
 That's it. The script:
 1. creates a virtualenv (`.venv\`) and installs `requirements.txt` if needed;
 2. checks the LLM server from `config.json` is up and the model is loaded;
-3. saves the product's previous `<name>/<name>.html` as `<name>/<name>.prev.html`;
+3. writes a dated page `products/<name>/vinted/<name>_DD.MM.YY.html` (and prunes days older than `keep_days`);
 4. runs the pipeline: fetch → title classify → vision verify → build HTML.
 
 ### Resuming after a failure
@@ -154,9 +162,8 @@ run.ps1              orchestrator: venv, LLM check, backup, resumable multi-prod
 config.json          LLM endpoint / model / API key (shared by all products)
 requirements.txt     python deps (pillow only)
 products/
-  bois.json          one file per product (see "Adding a new product")
-<name>/<name>.html        output page per product
-<name>/<name>.prev.html   last run's page (kept by run.ps1)
+  <name>/<name>.json    one folder per product: config + results (see "Adding a new product")
+  <name>/vinted/<name>_DD.MM.YY.html   one page per search day (keep_days old kept)
 work/
   common.py          shared helpers (product config, paths, LLM, age cutoff)
   fetch_all.py       1. fetch + parse brand search pages          (no LLM)
@@ -205,7 +212,7 @@ python fetch_all.py bois         # ~1 min   -> data/bois/merged.json
 python filter_classify.py bois   # ~12 min  -> data/bois/classified.json (resumable)
 python vision_verify.py bois     # ~5 min   -> data/bois/vision_partial.json (resumable)
 python audit_dropped.py bois     # ~1.5 min -> prints descriptions of dropped items
-python build_html.py bois        # instant  -> bois/bois.html
+python build_html.py bois        # instant  -> products/bois/vinted/bois_<today>.html
 ```
 
 Without `run.ps1`, scripts fall back to built-in LLM defaults
@@ -220,7 +227,7 @@ Vinted's CDN).
 | What | Where |
 |---|---|
 | LLM endpoint / model / API key (all products) | `config.json` |
-| Everything product-specific | `products/<name>.json` |
+| Everything product-specific | `products/<name>/<name>.json` |
 | Age window | `age_months` in the product file (cutoff derived at runtime) |
 | Brand display order / aliases | product file: `brand_order`, `brand_aliases` |
 
@@ -260,7 +267,7 @@ cd work && python calibrate2.py     # rewrites work/id_date_fit.json
 ## Reuse
 
 `.\run.ps1` any time you want a fresh page (~20 min per product, mostly LLM time).
-It always keeps the previous output as `<name>/<name>.prev.html` so you can compare
-runs. Intermediate JSONs in `work\data\<name>\` are all inspectable — `classified.json`
+Each run's page is dated (`<name>_DD.MM.YY.html`) and previous days are kept
+per `keep_days` so you can compare runs. Intermediate JSONs in `work\data\<name>\` are all inspectable — `classified.json`
 holds title+brand+price+image for everything that passed the first filter, with the LLM
 class on each entry.

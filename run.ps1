@@ -4,10 +4,10 @@
     Vinted product finder - one-command pipeline runner (multi-product).
 
 .DESCRIPTION
-    A "product" is one search profile defined in products\<name>.json
+    A "product" is one search profile defined in products\<name>\<name>.json
     (brands, price range, age window, LLM prompts). Output goes to
-    <name>\<name>.html, with the previous run's page kept as
-    <name>\<name>.prev.html (one copy).
+    products\<name>\vinted\<name>_DD.MM.YY.html (dated, french format); the
+    previous runs' pages are kept per the product's keep_days (default 2).
 
     The script:
       1. creates a virtualenv (.venv\) and installs requirements.txt if needed
@@ -138,17 +138,22 @@ try {
 }
 
 # ------------------------------------------------ 3. which product(s) ----
+# a product is products\<name>\<name>.json
+$ProductsDir = Join-Path $root 'products'
+function Get-ProductNames {
+    if (Test-Path $ProductsDir) {
+        Get-ChildItem $ProductsDir -Directory |
+            Where-Object { Test-Path (Join-Path $_.FullName "$($_.Name).json") } |
+            ForEach-Object { $_.Name } | Sort-Object
+    } else { @() }
+}
 if ($All) {
-    $products = Get-ChildItem (Join-Path $root 'products') -Filter '*.json' |
-                ForEach-Object { $_.BaseName } | Sort-Object
+    $products = Get-ProductNames
     if (-not $products) { Write-Bad 'no products in products\'; exit 1 }
     Write-Ok "products: $($products -join ', ')"
 } else {
-    if (-not (Test-Path (Join-Path $root "products\$Product.json"))) {
-        $available = if (Test-Path (Join-Path $root 'products')) {
-            (Get-ChildItem (Join-Path $root 'products') -Filter '*.json').BaseName -join ', '
-        } else { 'none' }
-        Write-Bad "product '$Product' not found in products\ (available: $available)"
+    if (-not (Test-Path (Join-Path $ProductsDir "$Product\$Product.json"))) {
+        Write-Bad "product '$Product' not found in products\ (available: $((Get-ProductNames) -join ', '))"
         exit 1
     }
     $products = @($Product)
@@ -158,10 +163,11 @@ if ($All) {
 $failed = @()
 foreach ($prod in $products) {
     $dataDir  = Join-Path $work "data\$prod"
-    $outDir   = Join-Path $root $prod
+    $outDir   = Join-Path (Join-Path $ProductsDir $prod) 'vinted'
     $stateFile = Join-Path $dataDir '.run_state.json'
-    $outHtml   = Join-Path $outDir "$prod.html"
-    $prevHtml  = Join-Path $outDir "$prod.prev.html"
+    # dated output (french date): <name>_DD.MM.YY.html; build_html.py rotates
+    # these, keeping at most the product's keep_days (default 2)
+    $outHtml = Join-Path $outDir ("{0}_{1}.html" -f $prod, (Get-Date).ToString('dd.MM.yy'))
     New-Item -ItemType Directory -Force -Path $dataDir, $outDir | Out-Null
 
     Write-Step "PRODUCT: $prod"
@@ -195,14 +201,6 @@ foreach ($prod in $products) {
     if ($Revision) {
         $state.vision = $false
         Remove-Item -Force (Join-Path $dataDir 'vision_partial.json') -ErrorAction SilentlyContinue
-    }
-
-    # ---- backup previous output (exactly one copy) ----
-    if (Test-Path $outHtml) {
-        Move-Item -Force $outHtml $prevHtml
-        Write-Ok "previous output saved as $(Split-Path $prevHtml -Leaf) (1 copy kept)"
-    } else {
-        Write-Ok 'no previous output to back up'
     }
 
     function Invoke-Step(
