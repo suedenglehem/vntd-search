@@ -19,7 +19,45 @@ def load_product(name):
         sys.exit('unknown product "%s" (available: %s)' % (name, ', '.join(available) or 'none'))
     cfg = json.load(io.open(p, encoding='utf-8'))
     cfg['name'] = name
+    _fill_prompts(cfg)
     return cfg
+
+
+def _fill_prompts(cfg):
+    """Expand product variables into the prompt templates so the 'prompts'
+    block stays generic and reusable across products.
+
+    Variables (from the 'vars' section + values derived from the config):
+      {product}          product label, e.g. "table-tennis blade"
+      {classes}          keep_classes joined, e.g. "BLADE, RACKET"
+      {other_classes}    keep_classes + auxiliary_class, e.g. "BLADE, RACKET, RUBBER"
+      {class_defs}       "BLADE = <def>. RACKET = <def>" from vars.product_class
+      {auxiliary_class}  vars.auxiliary_class (default RUBBER)
+      {auxiliary_note}   vars.auxiliary_note
+      {other_note}       vars.other_note
+      {auxiliary_hint}   vars.auxiliary_hint
+    Runtime-only placeholders ({title}, {brand}) are left untouched for the
+    per-item .format() call in each pipeline step.
+    """
+    vars_ = cfg.get('vars', {})
+    keep = cfg.get('keep_classes', [])
+    product_class = vars_.get('product_class', {})
+    class_defs = ' '.join('%s = %s' % (k, product_class[k])
+                          for k in keep if k in product_class)
+    auxiliary_class = vars_.get('auxiliary_class', 'RUBBER')
+    class _Keep(dict):
+        """Missing keys stay as literal {key} (runtime placeholders like {title})."""
+        def __missing__(self, key):
+            return '{' + key + '}'
+
+    fmt = _Keep(vars_)
+    fmt['classes'] = ', '.join(keep)
+    fmt['keep_classes'] = ' and '.join(keep)
+    fmt['other_classes'] = ', '.join(keep + [auxiliary_class])
+    fmt['class_defs'] = class_defs
+    prompts = cfg.get('prompts', {})
+    for k, v in prompts.items():
+        prompts[k] = v.format_map(fmt)
 
 
 def data_dir(name):
