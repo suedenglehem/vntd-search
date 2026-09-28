@@ -7,7 +7,7 @@ from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from common import load_product, data_dir, llm_cfg, llm_headers, parse_reply, keep_names
+from common import load_product, data_dir, llm_cfg, keep_names, classify_reply, ESCALATE_BUDGET
 
 sys.stdout.reconfigure(encoding='utf-8')
 PRODUCT = sys.argv[1] if len(sys.argv) > 1 else 'bois'
@@ -17,52 +17,45 @@ llm = llm_cfg()
 
 SYS = cfg['prompts']['vision_system']
 USER_FMT = cfg['prompts']['vision_user']
-# The local model is a *thinking* model: reasoning_content is counted against
-# max_tokens, so a small budget can leave the actual answer (content) empty.
-MAX_TOKENS = cfg.get('vision_max_tokens', 4000)
+# Small budget for the common case; classify_reply() escalates to 4000 for the
+# few photos whose reasoning exhausts it, then rejects if still empty.
+MAX_TOKENS = cfg.get('vision_max_tokens', 400)
 KEEP = set(keep_names(cfg))
 WORKERS = cfg.get('vision_workers', 3)
 
 def fetch_img_png_b64(url):
     """Download the (webp) image and return base64 of a PNG re-encode.
 
-    The local server rejects webp bytes; PNG is accepted."""
-    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0',
-                                               'Referer': 'https://www.vinted.fr/'})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        raw = r.read()
-    buf = io.BytesIO()
-    Image.open(io.BytesIO(raw)).convert('RGB').save(buf, 'PNG')
-    return base64.b64encode(buf.getvalue()).decode()
-
-def verify(it):
+    The local server rejects webp bytes; PNG is accepted. Retried; raises on
+    final failure."""
+    last = None
     for attempt in range(3):
         try:
-            b64 = fetch_img_png_b64(it['img'])
-            body = json.dumps({
-                'model': llm['model'],
-                'messages': [{'role': 'system', 'content': SYS},
-                             {'role': 'user', 'content': [
-                                 {'type': 'text',
-                                  'text': USER_FMT.format(
-                                      title=it['title_clean'],
-                                      brand=it.get('listed_brand', ''))},
-                                 {'type': 'image_url',
-                                  'image_url': {'url': 'data:image/png;base64,' + b64}}]}],
-                'max_tokens': MAX_TOKENS, 'temperature': 0.0, 'stream': False,
-            }).encode('utf-8')
-            req = urllib.request.Request(llm['url'], data=body, headers=llm_headers())
-            with urllib.request.urlopen(req, timeout=180) as r:
-                d = json.loads(r.read().decode('utf-8'))
-            txt = d['choices'][0]['message'].get('content', '').strip()
-            if not txt:  # thinking ate the whole budget -> retry
-                raise RuntimeError('empty reply')
-            return it['url'], parse_reply(cfg, txt)
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0',
+                                                       'Referer': 'https://www.vinted.fr/'})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                raw = r.read()
+            buf = io.BytesIO()
+            Image.open(io.BytesIO(raw)).convert('RGB').save(buf, 'PNG')
+            return base64.b64encode(buf.getvalue()).decode()
         except Exception as e:
-            if attempt == 2:
-                return it['url'], 'ERROR:' + str(e)[:60]
+            last = e
             time.sleep(2 + attempt * 2)
-    return it['url'], 'ERROR'
+    raise last
+
+def verify(it):
+    try:
+        b64 = fetch_img_png_b64(it['img'])
+    except Exception as e:
+        return it['url'], 'ERROR:' + str(e)[:60]
+    messages = [{'role': 'system', 'content': SYS},
+                {'role': 'user', 'content': [
+                    {'type': 'text',
+                     'text': USER_FMT.format(title=it['title_clean'],
+                                              brand=it.get('listed_brand', ''))},
+                    {'type': 'image_url',
+                     'image_url': {'url': 'data:image/png;base64,' + b64}}]}]
+    return it['url'], classify_reply(llm, cfg, messages, MAX_TOKENS, timeout=180)
 
 items = json.load(io.open(os.path.join(D, 'classified.json'), encoding='utf-8'))
 keep = [x for x in items if x['class'] in KEEP]

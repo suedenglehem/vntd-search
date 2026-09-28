@@ -4,7 +4,7 @@ A "product" is one Vinted search profile defined in <products_dir>/<name>/<name>
 (products_dir: config.json "products_dir", default <root>/products; e.g.
 products/bois/bois.json -> outputs products/bois/vinted/bois.html).
 """
-import json, io, os, sys
+import json, io, os, sys, time, urllib.request
 from datetime import date, timedelta
 
 WORK = os.path.dirname(os.path.abspath(__file__))          # <root>/work
@@ -151,6 +151,70 @@ def llm_headers():
     if key:
         h['Authorization'] = 'Bearer ' + key
     return h
+
+
+# The local model is a *reasoning* model: hidden reasoning is billed against
+# max_tokens and the answer comes last. If the budget runs out
+# (finish_reason 'length'), content comes back EMPTY. Most items need very
+# little thinking; a few need a lot. So classification runs at a SMALL budget
+# (fast), and if a budget is exhausted it is retried ONCE at ESCALATE_BUDGET
+# before the item is reported as unclassifiable.
+ESCALATE_BUDGET = 4000
+
+
+def chat(llm, messages, max_tokens, timeout=180):
+    """One chat completion. Returns (content, finish_reason, reasoning_tokens).
+
+    The model's hidden reasoning is billed against max_tokens, so when
+    finish_reason is 'length' the budget ran out mid-reasoning and content is
+    usually empty — that's the signal to escalate, not a real answer."""
+    payload = json.dumps({'model': llm['model'], 'messages': messages,
+                          'temperature': 0.0, 'max_tokens': max_tokens,
+                          'stream': False}).encode('utf-8')
+    req = urllib.request.Request(llm['url'], data=payload, headers=llm_headers())
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        d = json.loads(r.read().decode('utf-8'))
+    c = d['choices'][0]
+    rt = (d.get('usage', {}).get('completion_tokens_details') or {}).get('reasoning_tokens')
+    return c['message'].get('content', '').strip(), c.get('finish_reason'), rt
+
+
+def classify_reply(llm, cfg, messages, budgets, timeout=180):
+    """Classify one item: a reply parsed against the product's class names.
+
+    `budgets` is the escalation ladder, tried in order (a single int is a
+    1-level ladder). Start small and fast; if a budget is exhausted by
+    reasoning (finish_reason 'length' -> empty answer) try the next, larger
+    one. If the whole ladder comes up empty, return REJECT_CLASS — "can't
+    confirm it is one of our classes" — so a hard-to-read item is dropped
+    rather than misclassified or looped on.
+
+    The local model is a *reasoning* model: hidden reasoning is billed against
+    the budget and the answer comes last. Measured on bois, titles need p50
+    ~560 and p90 ~1500 reasoning tokens, with a few runaways that never stop,
+    so the title stage ladders 300 -> 1500 -> 4000 (fast for ~95%, capped).
+    The vision stage — small title-kept set, photos, and cases like the 3080
+    Ti that need the full cap — ladders 400 -> 4000. Runaway reasoners (> 4000
+    tokens of thinking) are rejected at the cap instead of retried forever."""
+    if isinstance(budgets, int):
+        budgets = [budgets]
+    budgets = list(dict.fromkeys(budgets))
+    got_response = False
+    for b in budgets:
+        for attempt in range(2):  # 2 tries per budget level (network hiccups)
+            try:
+                txt, finish, _rt = chat(llm, messages, b, timeout)
+            except Exception:
+                if attempt == 1:
+                    break  # this budget level failed over the network -> next
+                time.sleep(2)
+                continue
+            got_response = True
+            if finish == 'length' or not txt:
+                break  # budget exhausted / silent -> escalate (or finish below)
+            return parse_reply(cfg, txt)
+    # No usable answer: network never answered, or thinking outgrew both budgets.
+    return 'ERROR' if not got_response else REJECT_CLASS
 
 
 def age_window():

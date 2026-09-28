@@ -171,12 +171,29 @@ Six strings: three stages × (system, user). See §4.
 
 ### LLM sizing
 
+The local model is a **reasoning model**: its hidden reasoning is billed
+against `max_tokens` and the answer comes last. Measured on bois, a typical
+title needs ~150–1500 reasoning tokens (p50 ~560), and a few titles trigger
+runaway reasoning that never stops. So the pipeline runs each item at a
+**small starting budget**, and if the budget is exhausted
+(`finish_reason: length`, i.e. an empty answer) it escalates:
+
+- **title stage**: `300 → 1500 → 4000` (covers ~95% of titles at the middle
+  step), then the item is treated as unclassifiable (`OTHER`);
+- **vision stage**: `400 → 4000`, then `OTHER`.
+
+Runaway reasoners (> 4000 tokens of thinking) are rejected at the cap instead
+of being retried forever. The cap is `common.ESCALATE_BUDGET` (4000).
+
 | Field               | Type / req. | Meaning |
 |---------------------|-------------|---------|
-| `title_max_tokens`  | number, default `1500` | Completion budget, title stage. **The local model is a reasoning model**: its hidden reasoning is billed against this budget and the answer comes last. If the budget is exhausted the reply's `content` is EMPTY and the item is silently misclassified — so keep a wide margin (≥ 1500). |
-| `vision_max_tokens` | number, default `4000` | Same for the vision stage. Photos can trigger long reasoning chains; ≥ 4000. |
+| `title_max_tokens`  | number, default `300` | Starting budget, title stage (auto-escalates up to 4000). |
+| `vision_max_tokens` | number, default `400` | Starting budget, vision stage (auto-escalates up to 4000). |
 | `workers`           | number, optional, default `4` | Parallel LLM calls, title stage. |
 | `vision_workers`    | number, optional, default `3` | Parallel LLM calls, vision stage. |
+
+Keep the starting budgets small — that's what keeps runs fast. Only raise them
+persistently if *many* (not a few) items of a product need the escalation.
 
 ---
 

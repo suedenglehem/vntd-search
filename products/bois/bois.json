@@ -2,16 +2,45 @@
   "title": "Bois & raquettes de tennis de table",
   "subtitle": "annonces vérifiées sur photo (revêtements, sacs et vêtements écartés)",
   "legend": "<b>bois</b> = lame seule · <b>raquette</b> = raquette complète",
-  "brands": ["joola", "tibhar", "xiom", "nexy", "victas", "andro", "cornilleau", "dhs", "butterfly"],
-  "brand_aliases": { "victas": "VICTAS", "dhs": "DHS" },
-  "brand_order": ["Butterfly", "Tibhar", "Joola", "DHS", "Cornilleau", "Andro", "Xiom", "VICTAS", "Nexy"],
+  "brands": [
+    "joola",
+    "tibhar",
+    "xiom",
+    "nexy",
+    "victas",
+    "andro",
+    "cornilleau",
+    "dhs",
+    "butterfly"
+  ],
+  "brand_aliases": {
+    "victas": "VICTAS",
+    "dhs": "DHS"
+  },
+  "brand_order": [
+    "Butterfly",
+    "Tibhar",
+    "Joola",
+    "DHS",
+    "Cornilleau",
+    "Andro",
+    "Xiom",
+    "VICTAS",
+    "Nexy"
+  ],
   "price_min": 10,
   "price_max": 30,
   "age_months": 4,
   "max_items": 200,
   "classes": {
-    "primary":   { "name": "bois",     "def": "a table-tennis blade/wood base without rubber attached (bois, blade, Schlägerholz, madeira sem borracha)" },
-    "secondary": { "name": "raquette", "def": "a finished racket with rubber attached (raquette, schläger, table tennis racket, pala con goma, set containing a racket)" }
+    "primary": {
+      "name": "bois",
+      "def": "a table-tennis blade/wood base without rubber attached (bois, blade, Schlägerholz, madeira sem borracha)"
+    },
+    "secondary": {
+      "name": "raquette",
+      "def": "a finished racket with rubber attached (raquette, schläger, table tennis racket, pala con goma, set containing a racket)"
+    }
   },
   "auxiliary": {
     "name": "gomme",
@@ -22,10 +51,21 @@
     "other_note": "anything else: rubber only, balls, apparel, tables, nets, bags, unrelated items",
     "disambig": "rubber visible = raquette, bare wood = bois"
   },
-  "badges": { "bois": "bois", "raquette": "raquette" },
+  "badges": {
+    "bois": "bois",
+    "raquette": "raquette"
+  },
   "badge_colors": {
-    "bois":     ["#eef6ee", "#2f7d43", "#cfe6d2"],
-    "raquette": ["#eef1fd", "#3b56c4", "#d4dcf8"]
+    "bois": [
+      "#eef6ee",
+      "#2f7d43",
+      "#cfe6d2"
+    ],
+    "raquette": [
+      "#eef1fd",
+      "#3b56c4",
+      "#d4dcf8"
+    ]
   },
   "prompts": {
     "title_system": "You classify Vinted {product} listings. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note}",
@@ -35,6 +75,6 @@
     "audit_system": "Look at this photo of a Vinted {product} listing. First describe the main object(s) in the photo in 1-2 sentences (what is it, and which of {all_names} it looks like). Then on the last line write 'VERDICT: X' where X is one of {all_names}.",
     "audit_user": "Title: \"{title}\"\nBrand: \"{brand}\""
   },
-  "title_max_tokens": 1500,
-  "vision_max_tokens": 4000
+  "title_max_tokens": 300,
+  "vision_max_tokens": 400
 }

@@ -46,6 +46,12 @@
     Full redo: implies -Refetch -Retitle -Revision (all three LLM/fetch steps are
     forced). Without -Product it reruns EVERY product in products\; with
     -Product <name> it does the full redo for that one product only.
+
+.PARAMETER Limit
+    Process only the first N candidates through the LLM stages (a quick smoke
+    test without burning a full run's worth of tokens). Everything downstream
+    (vision, HTML) shrinks accordingly. 0 (default) = no limit. Re-running later
+    without -Limit picks up the remaining items where this run left off.
 #>
 [CmdletBinding()]
 param(
@@ -55,7 +61,8 @@ param(
     [switch]$Retitle,
     [switch]$Revision,
     [switch]$Clean,
-    [switch]$Rerun
+    [switch]$Rerun,
+    [int]$Limit = 0
 )
 
 if ($Rerun) {
@@ -120,6 +127,7 @@ $model  = [string]$cfg.model
 $env:VT_LLM_URL     = $llmUrl
 $env:VT_LLM_API_KEY = $apiKey
 $env:VT_LLM_MODEL   = $model
+$env:VT_TEST_LIMIT  = [string]$Limit   # 0 = no limit; N = smoke-test first N candidates
 
 $headers = @{}
 if ($apiKey) { $headers['Authorization'] = "Bearer $apiKey" }
@@ -251,6 +259,15 @@ foreach ($prod in $products) {
     if ($code -ne 0) { $failed += $prod; continue }
     $code = Invoke-Step 'Step 3/4 vision verify'  'vision_verify.py'  $state 'vision' 'vision_partial.json' 'photos verified'
     if ($code -ne 0) { $failed += $prod; continue }
+    if ($Limit -gt 0) {
+        # Smoke test: only a slice of candidates went through the LLM. Keep
+        # title+vision marked NOT complete so a later full run re-enters both
+        # and resumes from the checkpoints (fetch is unaffected — merged.json
+        # is already complete).
+        $state.title = $false
+        $state.vision = $false
+        SaveState $state
+    }
     $code = Invoke-Step 'Step 4/4 build HTML'     'build_html.py'     $state $null    $null $null
     if ($code -ne 0) { $failed += $prod; continue }
 

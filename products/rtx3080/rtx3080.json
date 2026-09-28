@@ -47,6 +47,6 @@
     "audit_system": "Look at this photo of a Vinted {product} listing. First describe the main object(s) in the photo in 1-2 sentences (what is it, and which of {all_names} it looks like). Then on the last line write 'VERDICT: X' where X is one of {all_names}.",
     "audit_user": "Title: \"{title}\"\nBrand: \"{brand}\""
   },
-  "title_max_tokens": 1500,
-  "vision_max_tokens": 4000
+  "title_max_tokens": 300,
+  "vision_max_tokens": 400
 }
