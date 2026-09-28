@@ -1,0 +1,34 @@
+{
+  "title": "Bois Stiga (lames seules)",
+  "subtitle": "annonces vérifiées sur photo (raquettes et revêtements écartés)",
+  "legend": "<b>bois</b> = lame seule sans gomme",
+  "brands": ["stiga"],
+  "brand_aliases": { "stiga": "Stiga" },
+  "brand_order": ["Stiga"],
+  "price_min": 10,
+  "price_max": 30,
+  "age_months": 4,
+  "max_items": 200,
+  "keep_classes": ["BLADE"],
+  "badges": { "BLADE": "bois" },
+  "badge_colors": {
+    "bois":     ["#eef6ee", "#2f7d43", "#cfe6d2"]
+  },
+  "vars": {
+    "product": "table-tennis blade",
+    "product_class": {
+      "BLADE":  "a table-tennis blade/wood base without rubber attached (bois, blade, Schlägerholz, madeira sem borracha)"
+    },
+    "other_note": "anything else: a racket with rubber attached, rubber/sheet only, balls, apparel, tables, nets, bags, unrelated items"
+  },
+  "prompts": {
+    "title_system": "You classify Vinted {product} listings. Reply with EXACTLY one of: {classes}. {class_defs}. OTHER = {other_note}",
+    "title_user": "Listing title: \"{title}\"\nSeller brand field: \"{brand}\"\nClassify:",
+    "vision_system": "You are verifying a Vinted {product} listing. You are given the PHOTO of the item and its title. Look at the photo carefully. Decide what the item ACTUALLY is. Reply with EXACTLY one of: BLADE, OTHER. {class_defs}. OTHER = {other_note}",
+    "vision_user": "Title: \"{title}\"\nSeller brand: \"{brand}\"\nClassify from the photo:",
+    "audit_system": "Look at this photo of a Vinted {product} listing. First describe the main object(s) in the photo in 1-2 sentences (what is it — a bare wood blade without rubber, or something else). Then on the last line write 'VERDICT: X' where X is one of BLADE, OTHER.",
+    "audit_user": "Title: \"{title}\"\nBrand: \"{brand}\""
+  },
+  "title_max_tokens": 300,
+  "vision_max_tokens": 400
+}

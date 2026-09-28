@@ -30,12 +30,15 @@ def _fill_prompts(cfg):
     Variables (from the 'vars' section + values derived from the config):
       {product}          product label, e.g. "table-tennis blade"
       {classes}          keep_classes joined, e.g. "BLADE, RACKET"
-      {other_classes}    keep_classes + auxiliary_class, e.g. "BLADE, RACKET, RUBBER"
+      {other_classes}    keep_classes + auxiliary_class (when defined),
+                         e.g. "BLADE, RACKET, RUBBER"; just keep_classes when
+                         the product has no auxiliary class
       {class_defs}       "BLADE = <def>. RACKET = <def>" from vars.product_class
-      {auxiliary_class}  vars.auxiliary_class (default RUBBER)
-      {auxiliary_note}   vars.auxiliary_note
+      {auxiliary_class}  vars.auxiliary_class (optional; absent for products
+                         with a single kept class)
+      {auxiliary_note}   vars.auxiliary_note (optional)
       {other_note}       vars.other_note
-      {auxiliary_hint}   vars.auxiliary_hint
+      {auxiliary_hint}   vars.auxiliary_hint (optional)
     Runtime-only placeholders ({title}, {brand}) are left untouched for the
     per-item .format() call in each pipeline step.
     """
@@ -44,7 +47,7 @@ def _fill_prompts(cfg):
     product_class = vars_.get('product_class', {})
     class_defs = ' '.join('%s = %s' % (k, product_class[k])
                           for k in keep if k in product_class)
-    auxiliary_class = vars_.get('auxiliary_class', 'RUBBER')
+    aux = [vars_['auxiliary_class']] if 'auxiliary_class' in vars_ else []
     class _Keep(dict):
         """Missing keys stay as literal {key} (runtime placeholders like {title})."""
         def __missing__(self, key):
@@ -53,7 +56,7 @@ def _fill_prompts(cfg):
     fmt = _Keep(vars_)
     fmt['classes'] = ', '.join(keep)
     fmt['keep_classes'] = ' and '.join(keep)
-    fmt['other_classes'] = ', '.join(keep + [auxiliary_class])
+    fmt['other_classes'] = ', '.join(keep + aux)
     fmt['class_defs'] = class_defs
     prompts = cfg.get('prompts', {})
     for k, v in prompts.items():
