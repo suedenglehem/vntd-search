@@ -59,7 +59,9 @@ param(
 )
 
 if ($Rerun) {
-    $Refetch = $true; $Retitle = $true; $Revision = true
+    $Refetch = $true
+    $Retitle = $true
+    $Revision = $true
     if (-not $All -and -not $PSBoundParameters.ContainsKey('Product')) { $All = $true }
 }
 
@@ -138,8 +140,11 @@ try {
 }
 
 # ------------------------------------------------ 3. which product(s) ----
-# a product is products\<name>\<name>.json
-$ProductsDir = Join-Path $root 'products'
+# a product is <products_dir>\<name>\<name>.json; products_dir comes from
+# config.json ("products_dir", relative to repo root or absolute; default products)
+$ProductsRel = [string]$cfg.products_dir
+if (-not $ProductsRel) { $ProductsRel = 'products' }
+$ProductsDir = if ([System.IO.Path]::IsPathRooted($ProductsRel)) { $ProductsRel.TrimEnd('\') } else { Join-Path $root $ProductsRel }
 function Get-ProductNames {
     if (Test-Path $ProductsDir) {
         Get-ChildItem $ProductsDir -Directory |
@@ -149,11 +154,11 @@ function Get-ProductNames {
 }
 if ($All) {
     $products = Get-ProductNames
-    if (-not $products) { Write-Bad 'no products in products\'; exit 1 }
+    if (-not $products) { Write-Bad "no products in $ProductsDir"; exit 1 }
     Write-Ok "products: $($products -join ', ')"
 } else {
     if (-not (Test-Path (Join-Path $ProductsDir "$Product\$Product.json"))) {
-        Write-Bad "product '$Product' not found in products\ (available: $((Get-ProductNames) -join ', '))"
+        Write-Bad "product '$Product' not found in $ProductsDir (available: $((Get-ProductNames) -join ', '))"
         exit 1
     }
     $products = @($Product)

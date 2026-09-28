@@ -227,6 +227,7 @@ Vinted's CDN).
 | What | Where |
 |---|---|
 | LLM endpoint / model / API key (all products) | `config.json` |
+| Products folder location | `config.json`: `products_dir` (path relative to the repo root, or absolute; default `products`) |
 | Everything product-specific | `products/<name>/<name>.json` |
 | Age window | `age_months` in the product file (cutoff derived at runtime) |
 | Brand display order / aliases | product file: `brand_order`, `brand_aliases` |

@@ -1,15 +1,29 @@
 """Shared helpers: product config, paths, LLM settings.
 
-A "product" is one Vinted search profile defined in <root>/products/<name>/<name>.json
-(e.g. products/bois/bois.json -> searches table-tennis blades, outputs
-products/bois/vinted/bois.html).
+A "product" is one Vinted search profile defined in <products_dir>/<name>/<name>.json
+(products_dir: config.json "products_dir", default <root>/products; e.g.
+products/bois/bois.json -> outputs products/bois/vinted/bois.html).
 """
 import json, io, os, sys
 from datetime import date, timedelta
 
 WORK = os.path.dirname(os.path.abspath(__file__))          # <root>/work
 ROOT = os.path.dirname(WORK)                                # <root>
-PRODUCTS_DIR = os.path.join(ROOT, 'products')
+
+
+def _global_cfg():
+    """config.json at the repo root (LLM settings + shared paths)."""
+    p = os.path.join(ROOT, 'config.json')
+    if os.path.exists(p):
+        return json.load(io.open(p, encoding='utf-8'))
+    return {}
+
+
+# products folder: config.json "products_dir" (relative to root, or absolute),
+# default "products"
+_products_rel = _global_cfg().get('products_dir', 'products')
+PRODUCTS_DIR = (_products_rel if os.path.isabs(_products_rel)
+                else os.path.join(ROOT, _products_rel))
 
 
 def load_product(name):
