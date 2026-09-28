@@ -1,2 +1,6 @@
-# Only non-stdlib dependency. Everything else uses the Python standard library.
+# Non-stdlib dependencies. Everything else uses the Python standard library.
+# pillow: image decode/re-encode in vision_verify.py (webp -> PNG).
+# gradio: only needed for the product editor GUI (work/product_editor.py);
+#   the pipeline (fetch/classify/vision/build_html) does NOT need it.
 pillow>=9.0
+gradio>=6.0

@@ -303,6 +303,18 @@ def load_existing(name):
             'Loaded %s into the editor.' % name)
 
 
+# Field defaults shared by the GUI initial values and the Clear button.
+DEFAULTS = dict(name='', price_min=10, price_max=30, age=4, max_items=200,
+                brands='', title='', description='')
+
+
+def clear():
+    """Flush all input fields, the generated JSON, and the status to defaults."""
+    d = DEFAULTS
+    return (d['name'], d['price_min'], d['price_max'], d['age'], d['max_items'],
+            d['brands'], d['title'], d['description'], '', 'Cleared. Ready for a new product.')
+
+
 # ----------------------------------------------------------------- GUI ----
 def launch_gui(server_name='127.0.0.1', server_port=7860, inbrowser=True):
     import gradio as gr
@@ -313,11 +325,12 @@ def launch_gui(server_name='127.0.0.1', server_port=7860, inbrowser=True):
         with gr.Row():
             name = gr.Textbox(label='Product name (folder)', placeholder='rtx3080')
             load_btn = gr.Button('Load existing')
+            clear_btn = gr.Button('Clear')
         with gr.Row():
-            price_min = gr.Number(label='Price min (EUR)', value=10)
-            price_max = gr.Number(label='Price max (EUR)', value=30)
-            age = gr.Number(label='Age (months)', value=4)
-            max_items = gr.Number(label='Max items (page cap)', value=200, precision=0)
+            price_min = gr.Number(label='Price min (EUR)', value=DEFAULTS['price_min'])
+            price_max = gr.Number(label='Price max (EUR)', value=DEFAULTS['price_max'])
+            age = gr.Number(label='Age (months)', value=DEFAULTS['age'])
+            max_items = gr.Number(label='Max items (page cap)', value=DEFAULTS['max_items'], precision=0)
         brands = gr.Textbox(label='Brands / makes (comma-separated)', placeholder='nvidia')
         title = gr.Textbox(label='Page title (optional - LLM may choose)')
         description = gr.Textbox(label='Description of the product to find', lines=4,
@@ -335,6 +348,9 @@ def launch_gui(server_name='127.0.0.1', server_port=7860, inbrowser=True):
         save_btn.click(save, [name, out], status)
         load_btn.click(load_existing, [name],
                        [brands, price_min, price_max, age, max_items, out, status])
+        clear_btn.click(clear, None,
+                        [name, price_min, price_max, age, max_items,
+                         brands, title, description, out, status])
     demo.launch(server_name=server_name, server_port=server_port, inbrowser=inbrowser)
 
 
