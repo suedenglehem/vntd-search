@@ -6,7 +6,7 @@
   "brand_aliases": { "stiga": "Stiga" },
   "brand_order": ["Stiga"],
   "price_min": 10,
-  "price_max": 30,
+  "price_max": 60,
   "age_months": 4,
   "max_items": 200,
   "keep_classes": ["BLADE"],
