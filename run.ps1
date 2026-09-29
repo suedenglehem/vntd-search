@@ -131,20 +131,50 @@ $env:VT_TEST_LIMIT  = [string]$Limit   # 0 = no limit; N = smoke-test first N ca
 
 $headers = @{}
 if ($apiKey) { $headers['Authorization'] = "Bearer $apiKey" }
+
+# Try LM Studio's native endpoint first: each model entry carries a `type`
+# field ("vlm" = vision-capable), so we can actually VERIFY the step-3 vision
+# requirement here, not just hope. The OpenAI /v1/models endpoint has no such
+# flag, so it is only a fallback (reachability / id check).
+$nativeModels = $null
 try {
-    $resp = Invoke-WebRequest -Uri "$llmUrl/v1/models" -Headers $headers -TimeoutSec 10 -UseBasicParsing
-    $models = $resp.Content | ConvertFrom-Json
-    $ids = @($models.data | ForEach-Object { $_.id })
-    Write-Ok "$llmUrl reachable ($($ids.Count) model(s) loaded)"
-    if ($ids -notcontains $model) {
-        Write-Warn "configured model '$model' not in server list - check config.json"
+    $nresp = Invoke-WebRequest -Uri "$llmUrl/api/v0/models" -Headers $headers -TimeoutSec 10 -UseBasicParsing
+    $nativeModels = $nresp.Content | ConvertFrom-Json
+    Write-Ok "$llmUrl reachable (LM Studio native endpoint)"
+} catch { $nativeModels = $null }
+
+if ($null -ne $nativeModels) {
+    $ids = @($nativeModels.data | ForEach-Object { $_.id })
+    Write-Ok "$($ids.Count) model(s) on server"
+    $m = @($nativeModels.data | Where-Object { $_.id -eq $model }) | Select-Object -First 1
+    if ($null -eq $m) {
+        Write-Warn "configured model '$model' not found on server - check config.json"
+    } elseif ($m.state -ne 'loaded') {
+        Write-Warn "model '$model' is present but NOT loaded (state='$($m.state)') - load it in LM Studio"
+    } elseif ($m.type -eq 'vlm') {
+        Write-Ok "model '$model' loaded and vision-capable (type=vlm) - ready for all 4 steps"
+    } elseif ([string]::IsNullOrEmpty($m.type)) {
+        Write-Warn "model '$model' loaded, but its type wasn't reported - confirm it can read photos (step 3 needs vision)"
     } else {
-        Write-Ok "model '$model' available (needs vision for step 3)"
+        Write-Warn "model '$model' is loaded but type='$($m.type)' (not vlm) - step 3 (photo verify) needs a VISION model; step 2 (title) will still run"
     }
-} catch {
-    Write-Bad "cannot reach LLM server at $llmUrl : $($_.Exception.Message)"
-    Write-Host '    Steps 2-3 need it. Step 1 (fetch) could still run if you want.'
-    exit 1
+} else {
+    # Non-LM-Studio server, or native endpoint unavailable: id/reachability only.
+    try {
+        $resp = Invoke-WebRequest -Uri "$llmUrl/v1/models" -Headers $headers -TimeoutSec 10 -UseBasicParsing
+        $models = $resp.Content | ConvertFrom-Json
+        $ids = @($models.data | ForEach-Object { $_.id })
+        Write-Ok "$llmUrl reachable ($($ids.Count) model(s) loaded)"
+        if ($ids -notcontains $model) {
+            Write-Warn "configured model '$model' not in server list - check config.json"
+        } else {
+            Write-Warn "model '$model' available, but vision could not be auto-checked on this server - confirm it can read photos for step 3"
+        }
+    } catch {
+        Write-Bad "cannot reach LLM server at $llmUrl : $($_.Exception.Message)"
+        Write-Host '    Steps 2-3 need it. Step 1 (fetch) could still run if you want.'
+        exit 1
+    }
 }
 
 # ------------------------------------------------ 3. which product(s) ----

@@ -240,16 +240,25 @@ work/
    | `api_key` | `""` if no auth; otherwise sent as `Authorization: Bearer <key>` |
    | `model` | model id as reported by `GET <llm_url>/v1/models` |
 
-   One model can do both stages:
+   **The model MUST have a vision part** — step 3 (photo verification) sends each
+   listing's actual image to the model and drops the ones whose photo doesn't match.
+   That step is what removes sellers who mislabel an item (a rubber sold as "raquette",
+   an unrelated gadget under your brand word), so a text-only model cannot be used at
+   all: it can't read a photo, so step 3 is impossible and every false positive from
+   step 2 survives into the output.
+
+   One model can do both stages (vision models read text too):
 
    | Stage | Needs | Notes |
    |---|---|---|
    | Title classification | text chat | `max_tokens ≥ 300` for reasoning models (Qwen3.x etc.) |
-   | Photo verification | **vision** chat | Vinted images are webp; the llama.cpp server rejects webp bytes, so scripts convert to PNG via Pillow |
+   | Photo verification | **vision** chat | **required** — Vinted images are webp; the llama.cpp server rejects webp bytes, so scripts convert to PNG via Pillow |
 
-   The reference setup is `unsloth/qwen3.8-27b` (reasoning + vision). A vision model
-   alone is not enough (the title stage does the bulk filtering), and a text-only model
-   alone leaves false positives.
+   The reference setup is `unsloth/qwen3.8-27b` (reasoning + vision). Note that a
+   vision model is *necessary but not the whole job*: the title stage does the bulk
+   filtering, so a pure vision model that is weak at text classification will still
+   misroute items — pick something strong at both. `run.ps1` checks the model's
+   `type` from LM Studio's `/api/v0/models` and warns at startup if it isn't `vlm`.
 
 3. **Internet access from a non-datacenter IP.** Vinted is behind DataDome bot
    protection: plain curl with a browser User-Agent works from a home connection, but
