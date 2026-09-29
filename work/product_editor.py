@@ -11,7 +11,7 @@ GUI:      python product_editor.py
 Headless: python product_editor.py --name rtx3080 --desc "NVIDIA RTX 3080 card" \
               --brands nvidia --pmin 200 --pmax 500 --age 3 --save
 """
-import argparse, copy, io, json, os, re, select, socket, sys, time, urllib.parse
+import argparse, copy, io, json, os, re, select, socket, sys, threading, time, urllib.parse
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import common
@@ -422,6 +422,24 @@ def on_cancel():
     return 'Stopping the LLM call…'
 
 
+def on_exit():
+    """Exit button: close the tab AND kill this editor's process.
+
+    os._exit(0) (not sys.exit): the server runs in this process, so a hard
+    quit is what frees the port. The exit runs on a daemon thread after a
+    short delay so the "Closing…" status returned here is already on its way
+    to the client before the process dies; window.close() (fired client-side
+    by the button's `js` hook) closes the tab where the browser allows it."""
+    _dbg('GUI exit: process %d shutting down' % os.getpid())
+
+    def _die():
+        time.sleep(0.5)      # let the status response flush before we vanish
+        os._exit(0)
+
+    threading.Thread(target=_die, daemon=True).start()
+    return 'Closing this tab and shutting down the editor…'
+
+
 def generate(name, description, brands, pmin, pmax, age, max_items, title, model=None, _cancel=None):
     """LLM -> full GUI output tuple. Does NOT save. Bounded: never hangs, and
     cancellable: `_cancel` (a GenState) is what the Cancel button closes.
@@ -636,6 +654,11 @@ def launch_gui(server_name='127.0.0.1', server_port=7860, inbrowser=True):
         save_btn = gr.Button('Save to products/', variant='primary', elem_id='btn-save')
         list_btn = gr.Button('List products')
         products_list = gr.Markdown()
+        # Very bottom of the form: closes the browser tab and kills this
+        # process (os._exit frees the port; a plain button click's HTTP
+        # response would otherwise wait on the dying server).
+        gr.Markdown('<div style="text-align:center;color:#bbb;margin-top:14px;">— — —</div>')
+        exit_btn = gr.Button('Exit editor', variant='secondary', elem_id='btn-exit')
         def do_refresh():
             choices, value, note = query_models()
             return (gr.update(choices=choices, value=value),
@@ -659,6 +682,10 @@ def launch_gui(server_name='127.0.0.1', server_port=7860, inbrowser=True):
         clear_btn.click(clear, None,
                         [name, price_min, price_max, age, max_items,
                          brands, title, description, out, status])
+        # The `js` hook runs client-side first: best-effort tab close (browsers
+        # block window.close() on user-opened tabs, so it's a no-op there); the
+        # Python handler then hard-kills this process, freeing the port either way.
+        exit_btn.click(on_exit, None, status, js='() => { try { window.close(); } catch (e) {} }')
     demo.launch(server_name=server_name, server_port=server_port, inbrowser=inbrowser, css=css)
 
 

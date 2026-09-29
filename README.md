@@ -134,6 +134,56 @@ decides what counts as your product vs. an accessory (describe the exact object,
 enumerate the look-alikes to reject); the *vision* prompt re-checks the kept items
 against the actual photo. Keep the one-word reply contract.
 
+## Product editor (let the LLM write the config)
+
+`work/product_editor.py` is a Gradio web UI that turns a plain-English product
+description into a complete, validated `<name>/<name>.json` — no hand-writing
+required. It prompts the *same* LLM as the pipeline (`config.json`: `llm_url` /
+`model` / `api_key`), feeding it the config spec (`products/JSON.md`) plus two
+worked examples, so the output is pipeline-compatible by construction.
+
+```powershell
+.\editor.ps1                    # opens http://127.0.0.1:7860
+```
+
+The script does the same venv/requirements handling as `run.ps1` (gradio is
+already in `requirements.txt`), checks the LLM server, then runs the editor in
+the foreground — Ctrl+C stops it. If 7860 is busy with an already-running
+editor it picks the next free port and tells you. Equivalently:
+
+```powershell
+.\.venv\Scripts\python.exe work\product_editor.py
+```
+
+**Workflow:**
+1. Fill in *Product name* (folder name), *Description of the product to find*,
+   *Brands*, price window and age window (the title is optional — the LLM may choose).
+2. **Generate JSON with LLM** — the button greys out while the request is in
+   flight (reasoning models can take several minutes); **Cancel LLM call** aborts
+   a stuck or unwanted generation. The model's bounded budget escalates
+   (4000 → 8000 tokens) only if the first answer is truncated, and a 600 s
+   *idle* window (no bytes from the server) is the only automatic cutoff.
+3. The result lands in an editable box — fix anything by hand.
+4. **Save to products/** validates it (required keys, classes, reply contract)
+   and writes `products/<name>/<name>.json`.
+
+The other buttons: **Load existing** fills the form from an existing product
+(edit + re-generate, then Save — this is how products get retargeted, e.g.
+rtx3080 → rtx3090), **Clear** empties everything, **List products** lists what's
+in `products/`, and **Refresh models** re-queries the LLM server. The model
+dropdown shows only the models actually *loaded* on the server (LM Studio's
+native `/api/v0/models`); a warning appears under it if the `config.json` model
+is not among them.
+
+Headless equivalent (CI / one-liner / no browser):
+
+```
+python work\product_editor.py --name rtx3090 --desc "NVIDIA RTX 3090 card" \
+    --brands nvidia --pmin 200 --pmax 1500 --age 1 --max-items 10 --save
+```
+
+(`--json '<exact json>' --save` skips the LLM entirely and just validates + writes.)
+
 ## Quick start (Windows)
 
 ```powershell
@@ -160,12 +210,14 @@ Force a redo: `.\run.ps1 -Product X -Retitle`, `-Revision`, `-Refetch`, or `-Cle
 ```
 run.ps1              orchestrator: venv, LLM check, backup, resumable multi-product pipeline
 config.json          LLM endpoint / model / API key (shared by all products)
-requirements.txt     python deps (pillow only)
+requirements.txt     python deps (pillow; gradio only for the product editor)
 products/
+  JSON.md              the config spec the product editor feeds to the LLM
   <name>/<name>.json    one folder per product: config + results (see "Adding a new product")
   <name>/vinted/<name>_DD.MM.YY.html   one page per search day (keep_days old kept)
 work/
   common.py          shared helpers (product config, paths, LLM, age cutoff)
+  product_editor.py  Gradio UI: LLM generates a product config (see "Product editor")
   fetch_all.py       1. fetch + parse brand search pages          (no LLM)
   calibrate2.py      (re)calibrate item-ID -> creation-date fit   (no LLM, only when stale)
   filter_classify.py 2. price/age filter, LLM title classify      (text LLM)

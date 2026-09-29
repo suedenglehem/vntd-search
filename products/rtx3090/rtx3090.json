@@ -1,0 +1,53 @@
+{
+  "title": "NVIDIA GeForce RTX 3090",
+  "subtitle": "cartes RTX 3090 / 3090 Ti vérifiées sur photo (autres GPU NVIDIA écartés)",
+  "description": "NVIDIA GeForce RTX 3090 or RTX 3090 Ti graphics card, standalone",
+  "legend": "<b>rtx 3090</b> = carte RTX 3090 ou 3090 Ti",
+  "brands": [
+    "nvidia"
+  ],
+  "brand_aliases": {
+    "nvidia": "NVIDIA"
+  },
+  "brand_order": [
+    "NVIDIA"
+  ],
+  "price_min": 200,
+  "price_max": 1500,
+  "age_months": 1,
+  "max_items": 10,
+  "classes": {
+    "primary": {
+      "name": "rtx 3090",
+      "def": "an NVIDIA GeForce RTX 3090 or RTX 3090 Ti graphics card (carte graphique / Grafikkarte / placa de vídeo / tarjeta gráfica), standalone — the model must be 3090 or 3090 Ti, any brand's cooler"
+    }
+  },
+  "auxiliary": {
+    "name": "other nvidia card",
+    "def": "a DIFFERENT NVIDIA GPU, not a 3090/3090 Ti: RTX 4090/4080/3080/3070/2080, GTX 1660, etc."
+  },
+  "vars": {
+    "product": "NVIDIA GeForce RTX 3090 graphics card",
+    "other_note": "anything else: non-NVIDIA GPUs (AMD Radeon, Intel), PC cases, power supplies, cables, monitors, unrelated items"
+  },
+  "badges": {
+    "rtx 3090": "rtx 3090"
+  },
+  "badge_colors": {
+    "rtx 3090": [
+      "#eef6ee",
+      "#2f7d43",
+      "#cfe6d2"
+    ]
+  },
+  "prompts": {
+    "title_system": "You classify Vinted {product} listings. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note}",
+    "title_user": "Listing title: \"{title}\"\nSeller brand field: \"{brand}\"\nClassify:",
+    "vision_system": "You are verifying a Vinted {product} listing. You are given the PHOTO of the item and its title. Look at the photo carefully. Decide what the item ACTUALLY is. Reply with EXACTLY one of: {all_names}. {class_defs}. {aux_name} = {aux_def}. OTHER = {other_note} When in doubt, the model number printed on the card's cooler or in the title decides: 3090 / 3090 Ti = rtx 3090, any other model = other nvidia card",
+    "vision_user": "Title: \"{title}\"\nSeller brand: \"{brand}\"\nClassify from the photo:",
+    "audit_system": "Look at this photo of a Vinted {product} listing. First describe the main object(s) in the photo in 1-2 sentences (what is it, and which of {all_names} it looks like). Then on the last line write 'VERDICT: X' where X is one of {all_names}.",
+    "audit_user": "Title: \"{title}\"\nBrand: \"{brand}\""
+  },
+  "title_max_tokens": 300,
+  "vision_max_tokens": 400
+}
